@@ -1,0 +1,111 @@
+/* ---- 窄螢幕版面 ----
+   斷點刻意不用 @media：有些宿主（App 內的檢視器、被縮放的 iframe）給的版面視窗寬度
+   跟實際螢幕差很多，media query 整個不成立，桌機的四欄版面就被塞進手機螢幕裡。
+   改成由 JS 量實際寬度後掛上 html.narrow，量到什麼就是什麼。 */
+html.narrow,html.narrow body{height:100%;overflow-x:hidden;overflow-y:auto;-webkit-text-size-adjust:100%}
+/* 手機：3D 固定在上方，下面是你正在用的那一塊。內容放不進去時整頁可以捲，
+   不再賭視窗高度剛好等於螢幕高度——賭錯就會有按鈕在畫面外按不到。 */
+/* 高度給定，版面才會剛好等於一個螢幕（列高不會被內容撐開）；
+   min-height 是保險：宿主給的高度太矮時整頁可以捲，不會有按鈕留在畫面外。 */
+html.narrow #app{height:100%;min-height:430px;width:100%;
+  grid-template-rows:auto auto minmax(0,1fr) auto auto}
+html.narrow #topbar{gap:6px;padding:6px 8px;flex-wrap:nowrap;overflow:hidden;
+  position:sticky;top:0;z-index:30}
+html.narrow .brand{flex:none;min-width:0}
+html.narrow .brand span,html.narrow .brand i{display:none}
+html.narrow .brand b{font-size:13px;white-space:nowrap;letter-spacing:.02em}
+html.narrow .clock{font-size:16px;flex:none} html.narrow .clock small{display:none}
+html.narrow .spd{flex:none} html.narrow .spd button{padding:5px 7px}
+html.narrow #topbar .gauge{font-size:10px;flex:none}
+html.narrow #topbar .gauge label{display:none}
+/* 曝光與待處理改由分頁徽章呈現；發電機油移到 3D 的冷藏庫面板上 */
+html.narrow #topbar .gauge:nth-of-type(2),html.narrow #topbar .gauge:nth-of-type(3),
+html.narrow #topbar .gauge:nth-of-type(4){display:none}
+html.narrow #sp2,html.narrow #sp8{display:none}
+html.narrow .topspacer{flex:1;min-width:0}
+html.narrow .only-m{display:inline-block;flex:none;padding:6px 11px;font-size:14px;line-height:1}
+html.narrow #btn-bench{flex:none;font-size:0;padding:6px 10px}
+html.narrow #btn-bench::after{content:"檯";font-size:12px}
+html.narrow #moreset{display:none;position:fixed;top:46px;right:8px;z-index:70;
+  background:var(--panel-2);border:1px solid var(--line-hi);padding:7px;
+  flex-direction:column;gap:5px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+html.narrow body.more #moreset{display:flex}
+html.narrow body.more #moreset .tbtn{width:100%;text-align:left}
+
+html.narrow #tabs{display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel-2);
+  border-bottom:1px solid var(--line);position:sticky;top:41px;z-index:29}
+html.narrow #tabs button{background:transparent;border:0;border-bottom:2px solid transparent;
+  padding:10px 4px;color:var(--ink-faint);font-size:12px;letter-spacing:.08em;position:relative}
+html.narrow #tabs button[aria-pressed="true"]{color:var(--amber-hi);
+  border-bottom-color:var(--amber);background:#1d1a13}
+html.narrow #tabs button b{font-family:var(--mono);font-size:10px;margin-left:4px;
+  color:var(--ink-dim);font-weight:700}
+html.narrow #tabs button[aria-pressed="true"] b{color:var(--amber)}
+html.narrow #tabs button i{display:none;width:6px;height:6px;border-radius:50%;
+  background:var(--amber);position:absolute;top:8px;right:calc(50% - 22px)}
+html.narrow body.busy #tabs button[data-tab="act"] i{display:block}
+
+html.narrow #main{grid-template-columns:1fr;
+  grid-template-rows:clamp(130px,30vh,250px) minmax(0,1fr);min-height:0}
+html.narrow #stage{height:auto;min-height:130px;order:-1}
+html.narrow .col{display:none;min-height:0;border:0}
+html.narrow body[data-tab="work"] #left{display:flex}
+html.narrow body[data-tab="act"] #right{display:flex}
+html.narrow body[data-tab="stock"] #stock{display:flex;width:auto!important;flex-direction:column}
+/* 收合軌在手機上是多餘的：分頁本身就是開關，標題也已經寫了同一件事 */
+html.narrow #stock-rail{display:none}
+html.narrow body[data-tab="stock"] #stock .stockbody{display:flex;max-height:none}
+html.narrow #stock.closed .stockbody{display:flex}
+html.narrow .scroll{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+
+html.narrow #log{height:76px;padding:5px 10px;font-size:9.5px;line-height:1.7}
+/* 紀錄分頁：3D 留在上面，剩下的高度整個給紀錄，中間不留空帶 */
+html.narrow body[data-tab="log"] #app{grid-template-rows:auto auto auto auto minmax(0,1fr)}
+html.narrow body[data-tab="log"] #main{grid-template-rows:clamp(130px,30vh,250px) 0}
+html.narrow body[data-tab="log"] .col{display:none}
+html.narrow body[data-tab="log"] #log{height:auto;min-height:0;font-size:10.5px;
+  line-height:1.75;padding:6px 12px}
+html.narrow #bgbar{padding:5px 8px;gap:7px;flex-wrap:nowrap;overflow-x:auto;
+  -webkit-overflow-scrolling:touch}
+html.narrow #bgbar::-webkit-scrollbar{height:0}
+html.narrow .bgl{display:none}
+/* 空檔列：沒在做事的時候只留按鈕（說明文字在窄螢幕上會把按鈕擠出畫面）；
+   真的在做事的時候，進度那一行才是需要看的，留給它整條寬度。 */
+html.narrow #bgbar:not(.run):not(.held) .bgt{display:none}
+html.narrow .bgt{font-size:10.5px;flex:1 1 auto;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.narrow .bgp{width:70px;flex:none} html.narrow .bgb{flex-wrap:nowrap;flex:none}
+html.narrow .sbtn{padding:6px 10px;font-size:10px;white-space:nowrap}
+
+/* 觸控目標放大 */
+html.narrow .stp button{padding:9px 13px;font-size:13px}
+html.narrow .stp input{width:58px;font-size:17px}
+html.narrow .stp input.w{width:76px;font-size:21px}
+html.narrow .qf{padding:6px 10px;font-size:10.5px}
+html.narrow .chk,html.narrow .scopeitem{padding:11px 12px}
+html.narrow .act{padding:12px 13px} html.narrow .opt{padding:13px 14px}
+html.narrow .job{padding:11px 12px}
+html.narrow #qfilter{top:0}
+html.narrow .sec>h3{top:0}
+html.narrow #dpad{display:grid;grid-template-columns:repeat(3,40px);
+  grid-template-rows:repeat(2,40px);gap:3px;right:8px;bottom:8px;opacity:.62}
+html.narrow #dpad button{font-size:13px}
+html.narrow #hud-help{display:none}
+html.narrow #hud-fridge{padding:4px 7px;left:8px;top:8px;font-size:9px;line-height:1.5}
+html.narrow #hud-fridge b{font-size:13px}
+html.narrow #hud-place{right:8px;top:8px;font-size:9px;line-height:1.5;
+  max-width:44vw;text-align:right}
+html.narrow #speech{left:8px;right:8px;bottom:8px;padding:8px 10px}
+html.narrow .sp-tx{font-size:12px}
+html.narrow .pane{padding:11px 12px}
+html.narrow .sheet{max-height:92vh;padding:20px 17px}
+/* 手機上簡報／文件／結束白班都很長：把最後那排按鈕釘在底部，
+   不用滑到最下面才找得到「開始白班」。 */
+html.narrow .sheet>.btnrow{position:sticky;bottom:-20px;margin:16px -17px -20px;
+  padding:12px 17px;background:var(--panel);border-top:1px solid var(--line-hi);z-index:3}
+/* 最窄的手機：標題讓位給實際會按到的控制項 */
+html.tiny .brand{display:none}
+html.tiny #topbar .gauge:nth-of-type(1){display:none}
+/* 橫著拿：3D 佔多一點，佇列少一點 */
+html.narrow.land #main,html.narrow.land body[data-tab="log"] #main{
+  grid-template-rows:clamp(120px,44vh,300px) minmax(0,1fr)}

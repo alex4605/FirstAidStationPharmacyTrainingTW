@@ -52,7 +52,7 @@ function fireEvent(id){
     const up=rnd(9,13); S.fridge=Math.max(S.fridge,up);
     log(`※ 冷藏庫門沒有關緊，目前 ${up.toFixed(1)}℃。`,'l-bad');
     evtChoice('冰箱門沒關緊', `冷藏庫 ${up.toFixed(1)}℃`,
-      `<p>不知道是誰拿東西之後沒把門壓到底。溫度已經到 <b>${up.toFixed(1)}℃</b>，不知道多久了。裡面是 Insulin 2 支、破傷風類毒素、Oxytocin。</p>`
+      `<p>不知道是誰拿東西之後沒把門壓到底。溫度已經到 <b>${up.toFixed(1)}℃</b>，不知道多久了。裡面是 Insulin ${drugById.ins.have} 支、破傷風類毒素、Oxytocin。</p>`
       +'<div class="note cold">脫離 2–8℃ 的時間長度決定效價，而「不知道多久」本身就是一個答案。</div>',
       [{t:'關門、記錄發現時間與溫度、標示為效價存疑並通報', s:'該做的三件事：時間、溫度、標示。',
         go:()=>{ mark('P5',true,'發現冷鏈脫離後完成記錄、標示與通報'); S.coldBreach++;
@@ -130,7 +130,7 @@ function fireEvent(id){
         go:()=>{ mark('P3',false,'無醫囑發出管制藥品'); S.ctrlSkipped++;
           log('※ 無處方發出管制藥品。這件事會出現在 AAR 上。','l-bad'); }},
        {t:'直接拒絕，不解釋', s:'',
-        go:()=>{ mark('P3',true,'未依處方發放管制藥品'); mark('P6',false,'拒絕但未說明也未轉介');
+        go:()=>{ mark('P3',true,'無處方時拒絕發放管制藥品'); mark('P6',false,'拒絕但未說明也未轉介');
           log('他站了一會兒才走。','l-warn'); }}]);
   }
   if (id==='label'){
@@ -206,8 +206,8 @@ function openColdChoice(){
       <span>冰箱可續命約 4 小時。代價：通訊與監測設備改用備援，站長的對外聯繫降級。</span></button>
     <button class="opt" data-c="ice"><b>製冰與保冷袋人工維持</b>
       <span>可撐約 90 分鐘${S.iceReady?'（你稍早已預先備妥，可立即投入）':'（現在才做要花你 8 分鐘，藥局暫時無人）'}。</span></button>
-    <button class="opt" data-c="ins"><b>只保 Insulin，其餘放棄</b><span>2 支移入保冷箱。TT 與 Oxytocin 脫鏈報廢。</span></button>
-    <button class="opt" data-c="tt"><b>只保破傷風疫苗，其餘放棄</b><span>350 罐移入保冷箱。Insulin 與 Oxytocin 脫鏈報廢。</span></button>
+    <button class="opt" data-c="ins"><b>只保 Insulin，其餘放棄</b><span>${drugById.ins.have} 支移入保冷箱。TT 與 Oxytocin 脫鏈報廢。</span></button>
+    <button class="opt" data-c="tt"><b>只保破傷風疫苗，其餘放棄</b><span>${drugById.tt.have} ${drugById.tt.u}移入保冷箱。Insulin 與 Oxytocin 脫鏈報廢。</span></button>
     <div class="field"><label>決策理由（會進入紀錄與 AAR）</label>
       <textarea id="coldwhy" placeholder="例：TT 影響 12 名以上外傷患；Insulin 只影響 2 人，且其中一人的存活路徑本來就是後送透析。"></textarea></div>`,
     ()=>{ $('sheet').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
@@ -251,7 +251,7 @@ function strike(){
       {t:'立即上止血帶於傷口近心端，記錄上帶時間，再評估其他傷處',v:'good',fb:'正確。止血帶時間一定要寫在身上或紀錄上。'},
       {t:'先用紗布加壓，觀察十分鐘',v:'bad',fb:'噴射狀出血代表動脈損傷，直接壓迫常不足。'},
       {t:'先量血壓再決定',v:'bad',fb:'先止血。血壓在活動性出血時不是決策依據。'}]},
-     {q:'出血控制，病人臉色蒼白、心跳 128',opts:[
+     {q:'出血已控制，病人臉色蒼白、心跳 128',opts:[
       {t:'建立靜脈路徑並依醫囑輸液、保暖、持續監測，同時通知醫師',v:'good',fb:'IV 與輸液在 EMT-2 執業範圍內。低體溫是創傷病人最快的殺手之一。'},
       {t:'自行推 Morphine 止痛',v:'bad',fb:'管制藥品且無醫囑，超出執業範圍。',pen:'P9'},
       {t:'先扶他到藥局坐著休息',v:'bad',fb:'休克病人不應行走。'}]}]});

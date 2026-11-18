@@ -86,7 +86,7 @@ const JOBS = [
   opts:[
    {t:'本站無 Vitamin K 注射劑與 PCC。可先停用 Warfarin、加壓止血、避免侵入性處置，並把這件事列為後送理由回報站長',v:'good',
     fb:'正確。藥師最有價值的一句話有時候是「我們沒有」——並且立刻把它轉成後送的依據。'},
-   {t:'給 Transamic Acid 就可以',v:'bad',fb:'TXA 是抗纖溶劑，不逆轉抗凝血作用。'},
+   {t:'給 Tranexamic Acid 就可以',v:'bad',fb:'TXA 是抗纖溶劑，不逆轉抗凝血作用。'},
    {t:'給 Vit B1/B6/B12',v:'bad',fb:'維他命 B 群與 Vitamin K 無關。'}]},
 {t:308,kind:'rx', pid:5, d:'cacl', dose:'10 mL IV slow', by:'張醫師', flag:null,
   why:'高血鉀的心肌保護。本站七日儲備僅 20 支。'},

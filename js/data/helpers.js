@@ -114,7 +114,7 @@ const ARCHETYPES = [
 
  {k:'ngo_intl', w:8, skill:'國際 NGO 藥事人員（外國執照）', needBrief:true, col:0x5fbfa8, sex:null,
   age:[28,50], tag:a=>`國際人道組織，派駐第 ${Math.max(1,Math.round(a.yrs/6))} 週`,
-  say:a=>`我是${a.place==='忠孝'?'無國界':'國際人道組織'}的藥師，我們在車道口那台車就是我們的。`
+  say:a=>`我是${a.place==='忠孝'?'無國界醫療團':'國際人道組織'}的藥師，車道口那台車就是我們的。`
     +`我熟人道物資的品項跟國際規格，但我知道我的執照不是你們國家發的。`,
   verify:'partial', vtxt:a=>`證件與派遣文件相符，他確實是合格藥師——<b>但執照是外國發給的</b>。`
     +`在本國執行藥品調劑須具本國藥師資格；他能做的是<b>辨識國際品項、換算規格、清點與紀錄</b>，`
@@ -152,6 +152,8 @@ function genHelper(i){
     : A.k==='dentist' ? '醫師' : A.k==='vet' ? '獸醫師'
     : (sex==='f'?'小姐':'先生');
   const display = name.slice(0,1) + honor;
+  // 題庫裡的「他／她」是寫死的；依這個人實際抽到的性別換成對的那一個（「其他」不動）
+  const gendered = s => sex==='f' ? s.replace(/(?<!其)他(?!們)/g,'她') : s.replace(/她(?!們)/g,'他');
   /* 語言：這一區住的人本來就不只講一種話。會講第二種語言的人，
      在有語言障礙的傷患面前，比你多的是耳朵而不是資格。 */
   const lang = chance(.5) ? pick(['台語','台語','客語','日語','日語','英語','英語','越南語','印尼語','粵語']) : null;
@@ -164,14 +166,14 @@ function genHelper(i){
     {w:14, mins:[110,200], why:'我女兒在留觀區，我去看她一下就回來——如果回得來。'},
     {w:12, mins:[90,170],  why:'站長把我調去檢傷那邊，那裡現在更亂。'},
     {w:12, mins:[80,150],  why:'我不行了，我從昨天到現在沒睡。'},
-    {w:10, mins:[60,120],  why:'我先生在外面等我，我真的得走了。'},
+    {w:10, mins:[60,120],  why:'我家人在外面等我，我真的得走了。'},
     {w:10, mins:[70,140],  why:'我只是路過看你忙不過來。我該回去顧我自己的人了。'},
   ];
   const spool=[]; STAY.forEach(x=>{ for(let k=0;k<x.w;k++) spool.push(x); });
   const st = pick(spool);
-  return {id:'h'+i, arch:A.k, name:display, full:name, age, sex, lang,
-    tag:A.tag(d), say:A.say(d)+'　'+pick(WHYHERE), quirk:A.k==='thief'?pick(THIEF_TELLS):pick(QUIRKS), thief:!!A.thief,
-    verify:A.verify, verifyTxt:A.vtxt(d), ok, risky,
+  return {id:'h'+i, arch:A.k, name:display, full:name, age, sex, lang, ta: sex==='f'?'她':'他',
+    tag:A.tag(d), say:A.say(d)+'　'+pick(WHYHERE), quirk:gendered(A.k==='thief'?pick(THIEF_TELLS):pick(QUIRKS)), thief:!!A.thief,
+    verify:A.verify, verifyTxt:gendered(A.vtxt(d)), ok, risky,
     stayMin: st.why ? rint(st.mins[0],st.mins[1]) : 999, leaveWhy: st.why,
     needBrief:A.needBrief, col:A.col, skill:A.skill};
 }

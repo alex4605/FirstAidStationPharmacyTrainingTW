@@ -38,7 +38,7 @@ function pushJob(spec){
   } else if (j.kind==='lang'){
     j.picked=[];
     j.pts=j.pts.slice();
-    log(`領藥窗口來了一位${j.flagTxt}的病人，溝通有困難。`, 'l-con');
+    log(`領藥窗口來了一位講${j.flagTxt}的人，溝通有困難。`, 'l-con');
   } else if (j.kind==='emt2'){
     log(`${j.who} 在${zoneById[j.zone].name}叫住你：${j.title}`, 'l-con');
   } else if (j.kind==='cbr'){
@@ -456,7 +456,7 @@ function answerEmt(j, i){
   if (o.v==='good'){ S.emtGood++; mark('P9',true,`${j.title}／${st.q}：處置正確`); }
   else if (o.v==='mid'){ mark('P9',false,`${j.title}／${st.q}：處置不理想`); }
   else { S.emtBad++; mark('P9',false,`${j.title}／${st.q}：處置錯誤`);
-    if (o.pen){ S.scope++; mark(o.pen,false,`${j.title}：${o.pen==='P9'?'超出 EMT-2 執業範圍':'程序未依規'}`); } }
+    if (o.pen){ S.scope++; mark(o.pen,false,`${j.title}：${o.pen==='P9'?'超出 EMT-2 執業範圍':'未依規定程序'}`); } }
   j.step++;
   if (j.step>=j.steps.length){
     j.status='done'; j.doneAt=S.t;

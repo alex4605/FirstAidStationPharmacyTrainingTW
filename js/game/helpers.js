@@ -20,7 +20,7 @@ function assignChore(rec, id){
   say(rec.h.name, `${b.n}交給我，你去忙。`, 4200);
   mark('P10', skilled, skilled
     ? `委派 ${rec.h.name} 獨立執行「${b.n}」（在其能力範圍內）`
-    : `委派 ${rec.h.name} 執行「${b.n}」，但這超出他熟悉的範圍`);
+    : `委派 ${rec.h.name} 執行「${b.n}」，但這超出其熟悉的範圍`);
   dirty.helpers=dirty.bg=true;
 }
 function tickChores(dt){
@@ -141,7 +141,7 @@ function tickPatrol(dt){
         say(P.sp.name, line.t, 5600);
         narrate(line.zh, 5200);
         const tr=S.helpers.find(x=>x.active&&!x.away&&x.h.lang===P.sp.lang);
-        if (tr) narrate(`站內的 ${tr.h.name} 會講${P.sp.lang}——需要的話可以請他過來。`,4600);
+        if (tr) narrate(`站內的 ${tr.h.name} 會講${P.sp.lang}——需要的話可以請${tr.h.ta}過來。`,4600);
       }
       P.said=(P.said||0)+1; P.cool=25;
     }
@@ -248,18 +248,18 @@ function tickHelperEdu(dt){
       S.eduGood++;
       mark('P6', true, `${j.topic}：由 ${name} 完成給藥指導（在其資格與能力範圍內）`);
       mark('P10', true, `${name} 獨立完成一次衛教`);
-      say(name, `${j.pat.nm} 的用藥說明我講完了，他複誦了一次。`, 4600);
+      say(name, `${j.pat.nm} 的用藥說明我講完了，也請對方複誦了一次。`, 4600);
       log(`${name} 完成 ${j.pat.nm} 的用藥指導。`,'l-ok');
     } else if (able){
       S.eduBad++;
       mark('P6', false, `${j.topic}：由 ${name} 完成，但未做作業簡介，重點有漏`);
-      say(name, `我跟他講過了……大概講了怎麼吃。`, 4600);
+      say(name, `我跟病人講過了……大概講了怎麼吃。`, 4600);
       log(`${name} 做了衛教，但沒有講到停藥時機與警訊。`,'l-warn');
     } else {
       S.eduBad++;
       mark('P6', false, `${j.topic}：交給不具給藥指導資格的 ${name}（${rec.h.skill}）`);
       mark('P10', false, `${name} 被授權執行超出其範圍的衛教`);
-      say(name, `我照藥袋上寫的念給他聽了。他點頭了。`, 5200);
+      say(name, `我照藥袋上寫的念了一遍，對方點頭了。`, 5200);
       log(`※ ${name} 不具給藥指導資格。病人聽到的是念出來的字，不是指導。`,'l-bad');
     }
     dirty.q=dirty.helpers=dirty.detail=true;

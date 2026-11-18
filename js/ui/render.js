@@ -166,7 +166,7 @@ function renderQueue(){
       if (j.status==='done'){ const v=j.opts[j.picked].v;
         chips=`<span class="chip ${v==='good'?'done':v==='mid'?'ret':'err'}">${v==='good'?'處置正確':v==='mid'?'不完整':'處置錯誤'}</span>`; }
     } else if (j.kind==='help'){
-      title=`${j.h.name}（${j.h.tag}）`; sub='有人走過來說他可以幫忙'; who='避難民眾';
+      title=`${j.h.name}（${j.h.tag}）`; sub='有人走過來說想幫忙'; who='避難民眾';
       if (j.status==='done') chips=j.declined?'<span class="chip ret">已婉拒</span>'
         :`<span class="chip ${(j.scope||[]).some(s=>j.h.risky.includes(s))?'err':'done'}">${(j.scope||[]).length?'已授權':'未授權'}</span>`;
     } else {
@@ -307,7 +307,7 @@ function renderChoiceJob(j, cfg){
 function renderCon(j){
   renderChoiceJob(j, {
     title:`諮詢 #${String(j.n).padStart(2,'0')}`,
-    sub:`${j.who}（${j.role}）· ${clock(j.issued)}${j.status==='done'?'　·　已回覆':'　·　他在領藥窗口等你'}`,
+    sub:`${j.who}（${j.role}）· ${clock(j.issued)}${j.status==='done'?'　·　已回覆':'　·　人在領藥窗口等你'}`,
     paper:'諮詢',
     rows:`<div class="prow"><span>來源</span><b>${j.who}</b></div>
       <div class="prow"><span>問題</span><b class="big" style="font-size:12.5px;line-height:1.5">${j.q}</b></div>
@@ -386,7 +386,7 @@ function tryTranslator(j){
   j.helperTr = tr.h.name; j.trLang = tr.h.lang;
   j.pts = [{t:`請站內的 ${tr.h.name}（會講${tr.h.lang}）協助通譯，並請通譯者與病人各複誦一次`,ok:true}]
     .concat(j.pts);
-  log(`${tr.h.name} 會講${tr.h.lang}——他可以幫這一位。`,'l-key');
+  log(`${tr.h.name} 會講${tr.h.lang}——${tr.h.ta}可以幫這一位。`,'l-key');
   dirty.detail=true;
 }
 function renderLang(j){
@@ -397,11 +397,11 @@ function renderLang(j){
     rows:`<div class="prow"><span>情況</span><b style="color:var(--ink-dim);font-weight:400">${j.intro}</b></div>
       <div class="prow"><span>診斷</span><b>${j.dx}</b></div>`,
     pre: (j.helperTr?`<div class="note ok"><b>${j.helperTr}</b> 會講${j.trLang}。
-      他就在站內——這一題你不必自己猜。</div>`:'')
+      人就在站內——這一題你不必自己猜。</div>`:'')
       + (j.intro2?`<div class="note warn">有人在問他是哪邊的人。<b>依醫療需求施救、不因身分區別，是不可協商的原則。</b>
       你的紀錄會被看見，也會被引用。</div>`:''),
     hint:`這一題從頭到尾都在你的桌子上。語言不通不會改變你要回答的三個問題：
-      <b>他吃過什麼、對什麼過敏、你能不能安全地給他下一劑。</b><br>
+      <b>對方吃過什麼、對什麼過敏、你能不能安全地給出下一劑。</b><br>
       選出你要採取的做法（至少 ${j.need} 項）。`,
     doneLabel:'正確做法', badLabel:'不當做法', go:'開始',
     doneExtra:jj=>jj.coda?`<div class="note" style="border-left-color:var(--amber)">${jj.coda}</div>`:'',
@@ -451,7 +451,7 @@ function renderLogi(j){
         <b>對方的書面需求清單</b><br>${(j.hasList||j.askedList)
           ? `已取得。上面寫的是：${(j.listItems||[]).join('、')}。<br>
              <span style="color:var(--ink-faint)">有清單，你才知道自己讓出去的是不是他們真正需要的，也才有依據保留本站的量。</span>`
-          : `${j.who||c.who} 沒有帶。他說「上面交代的」「你就給一點」。<br>
+          : `${j.who||c.who} 沒有帶，只說「上面交代的」「你就給一點」。<br>
              <span style="color:var(--ink-faint)">沒有清單的調撥，日後對不上的時候，說不清楚的是你。</span>`}
         ${(j.hasList||j.askedList)?'':`<div class="btnrow" style="margin-top:8px">
           <button class="gbtn" data-cmd="lglist">要求對方補一張需求清單（${T.reqList} 分鐘）</button></div>`}
@@ -464,7 +464,7 @@ function renderLogi(j){
           S.sup.book?'':'　<b style="color:var(--warn)">（簿冊只剩最後幾頁）</b>'}</small></span></label>`:''}`:''}
     <div class="field"><label>${give?'你的請求理由與數量依據':'同意或拒絕的理由'}</label>
       <textarea id="lg-why" placeholder="${give?'例：Insulin 全站剩 2 支，站內有 2 名胰島素依賴者與 1 名高血鉀，請求補 10 支。'
-        :'例：TXA 可調出三分之一；Morphine 為本站唯一的強效止痛，且今日已有 1 名重傷，無法調出。'}">${j.why||''}</textarea></div>
+        :'例：TXA 可調出三分之一；Morphine 為本站最主要的強效止痛，且今日已有 1 名重傷，無法調出。'}">${j.why||''}</textarea></div>
     <div class="btnrow"><button class="pbtn" data-cmd="lggo">${give?'提出請求':'回覆對方'}</button></div></div>`;
   if (put('detail',h)){
     // j 是單一真相來源：勾選狀態由 onchange 維護，送出時不要再從 DOM 回讀覆蓋
@@ -486,15 +486,15 @@ function renderHelp(j){
   const h=j.h;
   let head=`<div class="pane"><h2>${h.name}　<span style="font-size:11px;color:var(--ink-faint)">${h.age} 歲</span></h2>
     <div class="sub">${h.tag}　·　${clock(j.issued)}　·　領藥窗口</div>
-    <div class="paper" data-t="自述"><div class="prow"><span>他說</span>
+    <div class="paper" data-t="自述"><div class="prow"><span>${h.ta}說</span>
       <b style="color:var(--ink-dim);font-weight:400">「${h.say}」</b></div>
       <div class="prow"><span>你注意到</span><b style="color:var(--ink-faint);font-weight:400">${h.quirk||'—'}</b></div>
-      ${h.lang?`<div class="prow"><span>順帶一提</span><b style="color:var(--cold);font-weight:400">他會講${h.lang}——今天可能用得上。</b></div>`:''}
-      <div class="prow"><span>他能待多久</span><b style="color:var(--ink-faint);font-weight:400">${
-        h.stayMin>=999?'他說他可以待到你下班。':`他說大概 ${Math.round(h.stayMin/60*10)/10} 小時。「${h.leaveWhy}」`}</b></div></div>`;
+      ${h.lang?`<div class="prow"><span>順帶一提</span><b style="color:var(--cold);font-weight:400">${h.ta}會講${h.lang}——今天可能用得上。</b></div>`:''}
+      <div class="prow"><span>能待多久</span><b style="color:var(--ink-faint);font-weight:400">${
+        h.stayMin>=999?'說可以待到白班結束。':`說大概 ${Math.round(h.stayMin/60*10)/10} 小時。「${h.leaveWhy}」`}</b></div></div>`;
   if (j.status==='done'){
     head += j.declined
-      ? `<div class="note">你婉拒了他的協助。<br><br>${h.verifyTxt}</div></div>`
+      ? `<div class="note">你婉拒了${h.ta}的協助。<br><br>${h.verifyTxt}</div></div>`
       : `<div class="note ${(j.scope||[]).some(s=>h.risky.includes(s))?'':'ok'}"
            style="${(j.scope||[]).some(s=>h.risky.includes(s))?'border-left-color:var(--bad)':''}">
           <b>查核</b>　${j.verified==='doc'?'已查驗證件與經歷':'僅聽其自述'}<br>${h.verifyTxt}<br><br>
@@ -506,8 +506,8 @@ function renderHelp(j){
     head+=`<div class="note">指引伍、一與行政區說明要求：<b>確認新進醫事人員之職業類別與有效執照，以及作業簡介</b>。
       口說無憑不是懷疑人，是流程。</div>
       <div class="acts">
-        <button class="opt" data-hv="doc"><b>請他出示證件，並追問經歷細節</b><span>${T.verify} 分鐘。你會知道他到底是誰。</span></button>
-        <button class="opt" data-hv="trust"><b>人手不夠，先讓他上工再說</b><span>${T.verifyFast} 分鐘。省下的時間，可能要用別的東西付。</span></button>
+        <button class="opt" data-hv="doc"><b>請${h.ta}出示證件，並追問經歷細節</b><span>${T.verify} 分鐘。你會知道${h.ta}到底是誰。</span></button>
+        <button class="opt" data-hv="trust"><b>人手不夠，先讓${h.ta}上工再說</b><span>${T.verifyFast} 分鐘。省下的時間，可能要用別的東西付。</span></button>
         <button class="opt" data-hv="no"><b>婉拒</b><span>你不需要為任何人的好意負責，但你少了一雙手。</span></button>
       </div></div>`;
     if (put('detail',head)) $('detail').querySelectorAll('[data-hv]').forEach(b=>b.onclick=()=>{
@@ -517,8 +517,8 @@ function renderHelp(j){
   if (j.stage==='scope'){
     head+=`<div class="note ${j.verified==='doc'?(h.verify==='good'?'ok':'warn'):'warn'}"
       style="${j.verified==='doc'&&h.verify==='bad'?'border-left-color:var(--bad)':''}">
-      <b>查核結果</b><br>${j.verified==='doc'?h.verifyTxt:'你沒有查核。你只知道他說他是什麼。'}</div>
-      <div class="note">勾選你要授權的項目。<b>授權超出對方資格或能力的項目會直接記入 P10</b>，而且他真的會去做。</div>
+      <b>查核結果</b><br>${j.verified==='doc'?h.verifyTxt:'你沒有查核。你只知道對方自稱是什麼。'}</div>
+      <div class="note">勾選你要授權的項目。<b>授權超出對方資格或能力的項目會直接記入 P10</b>，而且${h.ta}真的會去做。</div>
       <div class="scopegrid">${Object.keys(SCOPES).map(s=>{
         const risky=h.risky.includes(s);
         return `<label class="scopeitem ${risky?'risky':''} ${j.scope.includes(s)?'on':''}">
@@ -535,10 +535,10 @@ function renderHelp(j){
   // brief
   head+=`<div class="note ok"><b>${h.name} 已加入。</b>授權範圍：${j.scope.map(s=>SCOPES[s].n).join('、')||'無'}</div>
     <div class="note">指引要求的最後一步是<b>作業簡介與共識討論</b>：動線、品項在哪一層架上、標示規則、
-      以及最重要的那一句——<b>遇到不確定就停下來問我</b>。${h.needBrief?`<br><br>他自己說了他不熟現行品項。這 ${T.brief} 分鐘不是客套。`:''}</div>
+      以及最重要的那一句——<b>遇到不確定就停下來問我</b>。${h.needBrief?`<br><br>${h.ta}對本站的品項與流程還不熟。這 ${T.brief} 分鐘不是客套。`:''}</div>
     <div class="acts">
-      <button class="opt" data-hb="1"><b>做作業簡介（${T.brief} 分鐘）</b><span>花掉的時間，會從他之後幫你省下的時間裡拿回來。</span></button>
-      <button class="opt" data-hb="0"><b>先讓他上工，邊做邊教</b><span>佇列還在長高。你現在沒有 ${T.brief} 分鐘。</span></button>
+      <button class="opt" data-hb="1"><b>做作業簡介（${T.brief} 分鐘）</b><span>花掉的時間，會從${h.ta}之後幫你省下的時間裡拿回來。</span></button>
+      <button class="opt" data-hb="0"><b>先讓${h.ta}上工，邊做邊教</b><span>佇列還在長高。你現在沒有 ${T.brief} 分鐘。</span></button>
     </div></div>`;
   if (put('detail',head)) $('detail').querySelectorAll('[data-hb]').forEach(b=>b.onclick=()=>
     helperBrief(j, b.dataset.hb==='1'));
@@ -581,8 +581,8 @@ function renderRx(j){
     ${j.cold?`<div class="note cold">冷藏品項。冷藏庫目前 <b>${S.fridge.toFixed(1)}℃</b>${S.fridge>8?'　—　已脫離 2–8℃，效價存疑。':'　—　冷鏈正常。'}</div>`:''}
     ${j.ctrl?`<div class="note ctrl">管制藥品。須上鎖存放、逐筆登記、雙人核對。目前登記 ${S.ctrlLedger.length} 筆。</div>`:''}
     ${j.raised?`<div class="note warn"><b>${j.raisedBy} 把這張攔下來了。</b><br>
-      他說：「${j.why?j.why.split('。')[0]+'。':'我覺得有問題，我不敢配。'}」<br>
-      這是作業簡介換來的——他知道遇到不確定就停下來問你。最後要怎麼處理，還是你的決定。</div>`:''}
+      理由是：「${j.why?j.why.split('。')[0]+'。':'我覺得有問題，我不敢配。'}」<br>
+      這是作業簡介換來的——對方知道遇到不確定就停下來問你。最後要怎麼處理，還是你的決定。</div>`:''}
     ${j.taken&&j.status==='pending'?`<div class="note">${j.taken.h.name} 正在配這一張。你也可以自己接手。</div>`:''}
     ${j.byHelper?`<div class="note">這張是 <b>${j.byHelper}</b> 獨立完成的。</div>`:''}
     ${j.askRes?`<div class="note ${j.askRes.v==='fix'?'ok':j.askRes.v==='ok'?'':'warn'}">

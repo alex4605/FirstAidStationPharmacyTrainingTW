@@ -88,7 +88,7 @@ function runNight(mode, wake, nh){
   else if (H.orders)
     push('22:40','留觀區 3 床需要口服止痛','mid','沒有備藥包，護理師自己從瓶子裡數，但你的書面指示讓劑量沒有出錯。花了她 25 分鐘。');
   else if (helperOK)
-    push('22:40','留觀區 3 床需要口服止痛','mid',`${nh.h.name} 依你白天做的作業簡介協助取藥，數量正確，但沒有書面指示可對照，他停下來確認了三次。`);
+    push('22:40','留觀區 3 床需要口服止痛','mid',`${nh.h.name} 依你白天做的作業簡介協助取藥，數量正確，但沒有書面指示可對照，${nh.h.ta}停下來確認了三次。`);
   else
     push('22:40','留觀區 3 床需要口服止痛','bad','沒有備藥包也沒有書面指示。護理師在昏暗的藥局裡自己找藥、自己算劑量，其中一床的間隔給錯了。');
 
@@ -98,15 +98,15 @@ function runNight(mode, wake, nh){
   else if (H.orders)
     push('01:15','傷患04（12 歲、34 kg）發燒','ok','你的書面指示上寫著「所有退燒止痛一律用藥水，成人錠不要動」，護理師照做了。你寫下來的那一行救了這一次。');
   else
-    push('01:15','傷患04（12 歲、34 kg）發燒','bad','沒有人知道那個孩子不能用成人錠。半夜三點，成人 500mg 錠被剝成兩半餵了下去。');
+    push('01:15','傷患04（12 歲、34 kg）發燒','bad','沒有人知道那個孩子不能用成人錠。半夜一點多，成人 500mg 錠被剝成兩半餵了下去。');
 
   // 03:30 管制藥品
   if (has('ctrl'))
     push('03:30','傷患12 疼痛，需要管制藥品','ok','你被叫醒，親自開鎖、取藥、逐筆登記、請護理師共同核對，然後回床上。這正是你該被叫醒的事。');
   else if (H.ctrl && helperOK)
-    push('03:30','傷患12 疼痛，需要管制藥品','mid',`${nh.h.name} 依交接簿冊完成登記，但雙人核對只有他一個人簽。帳對得起來，程序不完整。`);
+    push('03:30','傷患12 疼痛，需要管制藥品','mid',`${nh.h.name} 依交接簿冊完成登記，但雙人核對只有${nh.h.ta}一個人簽。帳對得起來，程序不完整。`);
   else if (helperBad)
-    push('03:30','傷患12 疼痛，需要管制藥品','bad',`你昨天把夜間值守授權給了 ${nh.h.name}。管制藥品櫃的鑰匙在一個不該拿到它的人手上，而且簿冊沒有登記。`);
+    push('03:30','傷患12 疼痛，需要管制藥品','bad',`你白天把夜間值守授權給了 ${nh.h.name}。管制藥品櫃的鑰匙在一個不該拿到它的人手上，而且簿冊沒有登記。`);
   else
     push('03:30','傷患12 疼痛，需要管制藥品','bad','沒有人能開管制藥品櫃，也沒有人敢叫你。那位傷患痛了三個小時，直到早上你自己醒來。');
 
@@ -201,7 +201,7 @@ function endGame(){
   const helpRows=S.jobs.filter(j=>j.kind==='help'&&j.status==='done').map(j=>{
     const h=j.h, risky=(j.scope||[]).filter(s=>h.risky.includes(s));
     const rc=S.helpers.find(r=>r.h===h);
-    const stay = rc ? (rc.active ? `在站至下班（${Math.round(S.t-rc.joinedAt)} 分）`
+    const stay = rc ? (rc.active ? `在站至白班結束（${Math.round(S.t-rc.joinedAt)} 分）`
       : `在站 ${Math.round((rc.leftAt||S.t)-rc.joinedAt)} 分　·　${h.leaveWhy||'離開'}`) : '';
     const v = j.declined ? (h.verify==='bad'?0:1) : (risky.length?2:(j.verified==='doc'?0:1));
     return `<tr><td>${h.name}<br><span style="color:var(--ink-faint);font-size:11px">${h.skill}${

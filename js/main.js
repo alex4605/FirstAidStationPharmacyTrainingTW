@@ -151,13 +151,13 @@ function bind(){
       openModal(`<h1>交辦給 ${rec.h.name}</h1>
         <p class="kicker">${rec.h.skill}　·　授權範圍：${rec.scope.map(x=>SCOPES[x].n).join('、')||'無'}
           ${rec.briefed?'　·　已完成作業簡介':'　·　<b>未做作業簡介</b>'}</p>
-        <div class="note">交出去的雜事他會自己做完，不佔用你的時間。
-          但<b>他做出來的結果你不會在旁邊看著</b>——尤其是盤點，數字錯了比沒數更危險。</div>
+        <div class="note">交出去的雜事${rec.h.ta}會自己做完，不佔用你的時間。
+          但<b>${rec.h.ta}做出來的結果你不會在旁邊看著</b>——尤其是盤點，數字錯了比沒數更危險。</div>
         ${avail.length?avail.map(k=>{
           const fit=rec.h.ok.includes(k==='pack'?'pack':'count');
           return `<button class="opt ${fit?'':'bad'}" data-give="${k}">
             <b>${BGJOBS[k].n}</b><span>${BGJOBS[k].hint}　·　
-            ${fit?'在他的能力範圍內':'<b style="color:var(--bad)">這不是他熟的事</b>'}</span></button>`;}).join('')
+            ${fit?'在能力範圍內':'<b style="color:var(--bad)">這不是對方熟的事</b>'}</span></button>`;}).join('')
           :'<p>目前沒有待辦的雜事。</p>'}
         <div class="btnrow"><button class="gbtn" id="gcancel">算了，我自己來</button></div>`,
         ()=>{ $('sheet').querySelectorAll('[data-give]').forEach(x=>x.onclick=()=>{

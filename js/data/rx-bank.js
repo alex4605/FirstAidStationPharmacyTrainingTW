@@ -57,7 +57,7 @@ const RX_FLAGGED = [
   alt:'要處理的是恢復胰島素與評估酮酸中毒，請醫師決定劑量與監測。', altD:'ins'},
 
  {kind:'rx', pid:7, d:'furoi', dose:'20 mg IV q12h prn', flag:'inter', preferBy:'林醫師',
-  why:'傷患07 是失血性休克。Furosemide 會再減少血容量，現在要的是止血與補血，不是利尿。',
+  why:'傷患07 是失血性休克。Furosemide 會再減少血容量，現在要的是止血與補充血容量，不是利尿。',
   alt:'不給。先處理出血與輸液，若有疑問由醫師確認。'},
 
  {kind:'rx', pid:4, d:'ibup', dose:'100mg/5mL　30 mL PO q6h prn', flag:'dose', preferBy:'林醫師',
@@ -73,7 +73,7 @@ const RX_FLAGGED = [
   alt:'止痛改用 Acetaminophen；血鉀與透析的問題另外跟醫師確認。', altD:'acet'},
 
  /* ── 台灣現場真的會遇到的幾個 ───────────────────── */
- {kind:'rx', pid:15, d:'ssd', dose:'外用 patch，每日換藥', flag:'inter', preferBy:'林醫師',
+ {kind:'rx', pid:15, d:'ssd', dose:'外用塗抹，每日換藥', flag:'inter', preferBy:'林醫師',
   why:'傷患15 有 G6PD 缺乏症（蠶豆症）。Silver Sulfadiazine 屬磺胺類，'
     +'G6PD 缺乏者使用可能誘發溶血。這一條在他的病歷第一行。',
   alt:'建議改用非磺胺類的燒燙傷敷料處理，並在藥局病人紀錄第一行標註 G6PD。', altD:'ns'},
@@ -96,14 +96,14 @@ const RX_FLAGGED = [
  {kind:'rx', pid:17, d:'augm', dose:'375 mg PO tid ×5 天份', flag:'inter', preferBy:'林醫師',
   why:'傷患17 對 Penicillin 過敏（幼時全身疹）。Amoxicillin/Clav 是 β-lactam，直接衝突。'
     +'他的過敏史寫在紀錄上，只是沒有人回頭看。',
-  alt:'建議改用 Azithromycin 或 Clindamycin 類；若一定要用 β-lactam，須由醫師評估交叉過敏風險。', altD:'azi'},
+  alt:'建議改用 Azithromycin 或 Clindamycin；若一定要用 β-lactam，須由醫師評估交叉過敏風險。', altD:'azi'},
 
  {kind:'rx', pid:12, d:'mida', dose:'5 mg IV q4h prn', flag:'inter', preferBy:'陳醫師',
   why:'傷患12 已經在用 Morphine。苯二氮平類與鴉片類併用會加成呼吸抑制，'
     +'而這裡沒有連續血氧監測，也沒有人能整夜盯著他。',
   alt:'建議避免常規併用；若非用不可，須先確認監測方式與 Naloxone 的可近性。', altD:'mor', ctrl:true},
 
- {kind:'rx', pid:5,  d:'amio', dose:'150 mg IV，以 5% 葡萄糖稀釋後緩推', flag:'route', preferBy:'蘇護理師',
+ {kind:'rx', pid:5,  d:'amio', dose:'150 mg IV，以生理食鹽水稀釋後緩推', flag:'route', preferBy:'蘇護理師',
   why:'轉抄時把稀釋液寫成了生理食鹽水。Amiodarone 在生理食鹽水中會沉澱，'
     +'必須以 5% 葡萄糖稀釋——這一點寫在仿單上，而現場沒有人會去翻仿單。',
   alt:'建議更正為以 5% 葡萄糖稀釋，並註明輸注時間。', altD:'amio'},
@@ -153,6 +153,6 @@ const RX_FLAGGED = [
   why:'轉抄時漏掉了劑量，只寫了頻次。而且傷患09 有鼻胃管，腸溶錠不能磨粉。',
   alt:'建議補寫劑量，並改為 Lansoprazole 40mg/Vial 針劑。', altD:'lansoi'},
  {kind:'rx', pid:11, d:'lora', dose:'2 mg PO hs', flag:'old', preferBy:'郭醫師',
-  why:'傷患11 是 82 歲的失智長者。長效苯二氮平類用於高齡者會增加譫妄與跌倒風險，屬於老年人潛在不適當用藥。',
+  why:'傷患11 是 82 歲的失智長者。苯二氮平類用於高齡者會增加譫妄與跌倒風險，屬於老年人潛在不適當用藥。',
   alt:'建議先處理脫水與環境定向，避免常規使用鎮靜劑。', altD:'ors'},
 ];

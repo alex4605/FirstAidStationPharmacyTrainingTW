@@ -162,7 +162,7 @@ const GREETS = {
              '如果窗口有人狀況不好，叫我，不要自己扛。',
              '你今天處理的那位太太——我後來陪她坐了半小時。她有講話了。'],
   '站長':['藥師，你需要什麼，寫給我。',
-         '你是我這站最不敢讓他倒下的人。'],
+         '這一站我最怕倒下的人，就是你。'],
 };
 function zoneOfPat(p){ return p.tag===1?'tx1' : p.tag===2?'obs' : 'pub'; }
 
@@ -275,7 +275,7 @@ function answerLang(j){
   startWork(`用藥史確認與給藥指導（${j.flagTxt}）`, T.lang, ()=>{
     j.status='done'; j.doneAt=S.t; j.score=[good,bad,bias];
     if (good>=j.need && bad===0){
-      mark('P13', true, `${j.nm}：於${j.flagTxt}障礙下完成過敏史確認與書面指示`);
+      mark('P13', true, `${j.nm}：於語言障礙（${j.flagTxt}）下完成過敏史確認與書面指示`);
       mark('P6', true, `${j.nm}：完成給藥指導`);
       log(`完成 ${j.nm} 的用藥史確認與給藥指導。`,'l-ok');
     } else {
@@ -357,7 +357,7 @@ function renderIdn(j){
       +'而「成分一樣」不等於「可以照支數代換」。'
     : '這是國內的學名藥，成分相同但廠商不同。<b>含量與外觀仍要核對一次</b>。'}</div>
     ${helper?`<div class="note ok">${helper.h.name} 可以幫你一起比對。`
-      +`${helper.h.arch==='ngo_intl'?'——而且國際品項正是他熟的東西。':''}</div>`:''}
+      +`${helper.h.arch==='ngo_intl'?`——而且國際品項正是${helper.h.ta}熟的東西。`:''}</div>`:''}
     <div class="note">比對完才能上架。<b>${IDN_MIN(j)} 分鐘</b>。</div>
     <div class="acts">
       <button class="act" data-cmd="idngo"><span class="an">逐項比對學名、含量、劑型與效期，換算成本站的單位並貼上中文標示
@@ -490,7 +490,7 @@ function doTheft(rec){
   S.theft = {who:rec.h.name, d, n, t:S.t};
   rec.active = false;
   log(`※ ${rec.h.name} 不見了。`,'l-bad');
-  say('吳志工', `藥師，剛剛那個人拿了東西就往樓梯間走了，我叫他他沒回頭。`, 6200);
+  say('吳志工', `藥師，剛剛那個人拿了東西就往樓梯間走了，我叫了也沒回頭。`, 6200);
   mark('P10', false, `授權未經查核／查核不實者進入藥局作業，導致 ${d.n.split(' ')[0]} 短少 ${n} ${d.u}`);
   mark('P3', false, `管制藥品 ${d.n.split(' ')[0]} 短少 ${n} ${d.u}`);
   dirty.stock=dirty.helpers=true;
@@ -544,7 +544,7 @@ function helperAuthorize(j){
     if (risky.length){
       S.overAuth += risky.length;
       mark('P10', false, `${h.name}（${h.skill}）被授權 ${risky.map(s=>SCOPES[s].n).join('、')}——超出其資格或能力範圍`);
-      log(`※ 授權 ${h.name} 執行 ${risky.map(s=>SCOPES[s].n).join('、')}。這超出他的範圍。`,'l-bad');
+      log(`※ 授權 ${h.name} 執行 ${risky.map(s=>SCOPES[s].n).join('、')}。這超出${h.ta}的範圍。`,'l-bad');
       if (h.verify==='bad' && (risky.includes('dispense')||risky.includes('check')))
         log('※ 你把調劑交給了一個沒有藥事人員資格的人。','l-bad');
     } else {
@@ -561,7 +561,7 @@ function helperAuthorize(j){
 function helperBrief(j, doIt){
   if (!doIt){
     j.stage='done'; j.status='done'; j.doneAt=S.t;
-    if (j.h.needBrief) mark('P10', false, `${j.h.name} 未接受作業簡介即上工（久未執業、不熟現行品項）`);
+    if (j.h.needBrief) mark('P10', false, `${j.h.name} 未接受作業簡介即上工（尚未熟悉本站品項與流程）`);
     else mark('P10', false, `${j.h.name} 未接受作業簡介`);
     log(`${j.h.name} 直接上工，未做作業簡介。`,'l-warn');
     dirty.q=dirty.detail=dirty.helpers=true; return;

@@ -41,4 +41,6 @@ for (const k in COMP) S.comp[k] = {good:0,bad:0,ev:[]};
 const clock = m => String(8+Math.floor(m/60)).padStart(2,'0')+':'+String(Math.floor(m%60)).padStart(2,'0');
 function log(m,c){S.log.push({t:clock(S.t),m,c:c||''}); if(S.log.length>300)S.log.shift(); dirty.log=true;}
 function mark(k,good,txt){const e=S.comp[k]; if(!e)return; good?e.good++:e.bad++;
-  e.ev.push({t:clock(S.t),good,txt}); if(e.ev.length>30)e.ev.shift();}
+  e.ev.push({t:clock(S.t),good,txt});
+  // 只留 30 筆時先丟最舊的「做對了」——AAR 要討論的是做錯的那幾筆
+  if (e.ev.length>30){ const i=e.ev.findIndex(x=>x.good); e.ev.splice(i<0?0:i,1); } }

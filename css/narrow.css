@@ -68,6 +68,8 @@ html.narrow body[data-tab="log"] #log{height:auto;min-height:0;font-size:10.5px;
 html.narrow #bgbar{padding:5px 8px;gap:7px;flex-wrap:nowrap;overflow-x:auto;
   -webkit-overflow-scrolling:touch}
 html.narrow #bgbar::-webkit-scrollbar{height:0}
+/* 手機：做完的空檔工作不必佔一格 */
+html.narrow #bgbar button:disabled{display:none}
 html.narrow .bgl{display:none}
 /* 空檔列：沒在做事的時候只留按鈕（說明文字在窄螢幕上會把按鈕擠出畫面）；
    真的在做事的時候，進度那一行才是需要看的，留給它整條寬度。 */

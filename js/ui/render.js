@@ -123,8 +123,9 @@ function renderQueue(){
     const kd=`<span class="kind ${k[1]}">${k[0]}</span>`;
     let title='', sub='', who='', chips='';
     if (j.kind==='rx'){
-      title=j.drug.n; sub=j.dose; who=j.by;
-      chips=[j.ctrl?'<span class="chip c">管制</span>':'', j.cold?'<span class="chip cold">冷藏</span>':'',
+      title=rxName(j); sub=j.dose; who=j.by;
+      const fm=RX_FMT[rxFormat(j)].chip;
+      chips=[fm?`<span class="chip fmt">${fm}</span>`:'', j.ctrl?'<span class="chip c">管制</span>':'', j.cold?'<span class="chip cold">冷藏</span>':'',
         j.bag?`<span class=chip>藥袋 ${j.bagK}/${j.bagN}</span>`:'',
         j.stat&&j.status==='pending'?'<span class="chip stat">STAT</span>':'',
         j.raised?'<span class="chip ret">幫手攔下</span>':'',
@@ -554,18 +555,13 @@ function renderRx(j){
   const p=j.pat, age=Math.round(S.t-j.issued);
   const stock=j.drug.counted?j.drug.have:j.drug.book, sure=j.drug.counted;
   const given=p.given.filter(g=>g.d===j.drug.id).length, pend=j.status==='pending';
-  const five=[['對病人',p.nm],['對藥品',j.drug.n.split(' ')[0]],
-    ['對劑量',(j.dose.match(/[\d.]+\s*(mg|IU|g|mL|µg)/i)||[j.dose])[0]],
-    ['對途徑',(j.dose.match(/\b(PO|IV|IM|SC|NG|霧化|外用)\b/i)||['—'])[0]],
+  const five=[['對病人',p.nm],['對藥品',rxName(j).split(' ')[0]],
+    ['對劑量',(j.dose.match(/[\d.]+\s*(mg|IU|g|mL|µg)/i)||['？'])[0]],
+    ['對途徑',(j.dose.match(/\b(PO|IV|IM|SC|NG|neb|霧化|外用)\b/i)||['—'])[0]],
     ['對時間',(j.dose.match(/\b(qd|bid|tid|qid|q\d+h|stat|hs|prn)\b/i)||['—'])[0]]];
   let h=`<div class="pane"><h2>處方 #${String(j.n).padStart(2,'0')}</h2>
     <div class="sub">${j.by} 開立於 ${clock(j.issued)}${pend?`　·　已等待 ${age} 分鐘`:`　·　${j.status==='done'?'已調劑':'已退回'}`}</div>
-    <div class="paper" data-t="處方箋">
-      <div class="prow"><span>病人</span><b>${p.nm}　${p.age}歲${p.sex}　${p.wt} kg</b></div>
-      <div class="prow"><span>診斷</span><b>${p.dx}</b></div>
-      <div class="prow"><span>品項</span><b class="big">${j.drug.n}</b></div>
-      <div class="prow"><span>用法</span><b>${j.dose}</b></div>${j.bag?`<div class=prow><span>藥袋</span><b>同一袋 ${j.bagK}/${j.bagN}　同袋其他品項：${S.jobs.filter(x=>x.kind==='rx'&&x.bag&&x.bag===j.bag&&x.n!==j.n).map(x=>x.drug.n.split(' ')[0]).join('、')||'尚未全部到齊'}</b></div>`:''}
-      <div class="prow"><span>開立</span><b>${j.by}${j.ctrl?'　（管制藥品）':''}${j.stat?'　STAT':''}</b></div></div>
+    ${rxPaper(j)}
     <div class="five">${five.map(f=>`<div><span>${f[0]}</span><b>${f[1]}</b></div>`).join('')}</div>
     <div class="pcard"><div class="ph"><b>藥局病人紀錄</b><span class="tagbox t${p.tag}">T${p.tag}</span></div>
       <div class="kv"><span>體重</span><b>${p.wt} kg${p.child?'（兒童）':''}</b></div>
@@ -670,16 +666,20 @@ function renderRx(j){
     return;
   }
   const can=S.atBench&&stock>0;
+  // 試過一次才知道整張配不出來：這時只剩先給一劑、替代、或以庫存不足退回
+  const shortNow = j.short && j.drug.have < j.short;
+  if (shortNow) h+=`<div class="note warn"><b>架上只有 ${j.drug.have} ${j.drug.u}，這張需要 ${j.short} ${j.drug.u}。</b>
+    整張配不出來。可以先給第一劑、改用替代品項，或以「庫存不足」退回並附上建議。</div>`;
   h+=`<div class="acts">
     ${j.ctrl?`<label class="chk ${j.ledger?'on':''}"><input type="checkbox" id="cl-led" ${j.ledger?'checked':''}>
       <span><b>逐筆登記於管制藥品簿冊</b><small>${S.sup.book?'品項、數量、病人、時間、簽章'
         :'<b style="color:var(--warn)">簿冊只剩最後幾頁</b>——再寫下去就得寫在便條紙上，那不算登記'}</small></span></label>
       <label class="chk ${j.dual?'on':''}"><input type="checkbox" id="cl-dual" ${j.dual?'checked':''}>
       <span><b>雙人核對</b><small>${S.t>344&&S.t<400?'此刻護理師均在處置中，找不到第二人。':'請一名護理師到場共同核對。'}</small></span></label>`:''}
-    <button class="act" data-cmd="disp" ${can?'':'disabled'}><span class="an">調劑並交付
-      <span class="aw">${can?(needsCount(j)?(j.drug.f==='口服'?'先數顆數，數好即交付':'先數支數，數好即交付')
+    <button class="act" data-cmd="disp" ${can&&!shortNow?'':'disabled'}><span class="an">調劑並交付
+      <span class="aw">${shortNow?'庫存不足以配完整張':can?(needsCount(j)?(j.drug.f==='口服'?'先數顆數，數好即交付':'先數支數，數好即交付')
   :`${dispTime(j).toFixed(0)} 分鐘${j.pat.child?'・含磨粉分裝':''}`):(stock<=0?'庫存為 0':'必須在藥局內作業')}</span></span><span class="ac">執行</span></button>
-    <button class="act warnb" data-cmd="ann" ${can?'':'disabled'}><span class="an">調劑並註記疑慮
+    <button class="act warnb" data-cmd="ann" ${can&&!shortNow?'':'disabled'}><span class="an">調劑並註記疑慮
       <span class="aw">配出去，但把疑慮寫下來</span></span><span class="ac">執行</span></button>
     <button class="act" data-cmd="ask" ${S.commsDown>S.t?'disabled':''}><span class="an">向 ${j.by} 確認
       <span class="aw">${S.commsDown>S.t?'無線電中斷中，聯絡不上':T.ask+' 分鐘・不退回，先問清楚'}</span></span><span class="ac">詢問</span></button>
@@ -702,7 +702,7 @@ function renderRx(j){
     <div class="field" id="retbox" hidden><label>退回理由</label>
       <select id="retreason">${REASONS.map(x=>`<option value="${x.id}">${x.n}　—　${x.d}</option>`).join('')}</select>
       <label style="margin-top:9px">替代建議</label>
-      <textarea id="rettxt" placeholder="例：建議改用 Acetaminophen 120mg/5mL 兒童藥水，34kg 依 10–15 mg/kg 給 14–17 mL。"></textarea>
+      <textarea id="rettxt" placeholder="例：建議改用 Acetaminophen 120mg/5mL 兒童藥水，20kg 依 10–15 mg/kg 給 8–12 mL。"></textarea>
       <div class="btnrow" style="margin-top:9px"><button class="pbtn" id="retgo">確認退回</button>
         <button class="gbtn" id="retno">取消</button></div></div></div>`;
   if (put('detail',h)){

@@ -9,7 +9,7 @@ function pushJob(spec){
     j.drug = drugById[j.d]; j.pat = patById[j.pid];
     j.ctrl = j.ctrl || j.drug.st==='ctrl'; j.cold = j.drug.st==='cold';
     j.ledger=false; j.dual=false;
-    log(`${j.by} 開立處方 #${String(j.n).padStart(2,'0')}　${j.pat.nm}　${j.drug.n}`, j.ctrl?'l-key':(j.stat?'l-warn':''));
+    log(`${j.by} 開立處方 #${String(j.n).padStart(2,'0')}　${j.pat.nm}　${j.enName||j.drug.n}`, j.ctrl?'l-key':(j.stat?'l-warn':''));
   } else if (j.kind==='con'){
     log(`${j.who} 到領藥窗口找你諮詢。`, 'l-con');
   } else if (j.kind==='edu'){
@@ -191,12 +191,19 @@ function doDispense(j, annotate, units){
     reveal('.counttop'); return; }
   const n = units || 1;
   if (j.drug.have < n){
-    // 帳面有、架上沒有——這就是不盤點的代價
-    log(`架上找不到那麼多 ${j.drug.n.split(' ')[0]}。帳面是 ${j.drug.book}，實際只有 ${j.drug.have}。`,'l-bad');
-    say('你', `${j.drug.n.split(' ')[0]} 不夠。帳面跟實際對不起來。`, 4200);
-    j.drug.book = j.drug.have; j.drug.counted = true;
-    mark('P4', false, `#${j.n} 調劑時才發現 ${j.drug.n.split(' ')[0]} 帳面與實際不符`);
-    j.counting=false; j.counted=null; dirty.stock=dirty.detail=true; return;
+    const nm=j.drug.n.split(' ')[0], wasBlind=!j.drug.counted;
+    if (wasBlind){
+      // 帳面有、架上沒有——這就是不盤點的代價（同一張只記一次）
+      log(`架上找不到那麼多 ${nm}。帳面是 ${j.drug.book}，實際只有 ${j.drug.have}。`,'l-bad');
+      say('你', `${nm} 不夠。帳面跟實際對不起來。`, 4200);
+      j.drug.book = j.drug.have; j.drug.counted = true;
+      if (!j.short) mark('P4', false, `#${j.n} 調劑時才發現 ${nm} 帳面與實際不符`);
+    } else {
+      // 你早就知道架上有多少：這不是帳的問題，是真的不夠
+      log(`架上只有 ${j.drug.have} ${j.drug.u} ${nm}，這張需要 ${n} ${j.drug.u}。`,'l-warn');
+    }
+    j.short = n;
+    j.counting=false; j.counted=null; j.cnt=null; dirty.stock=dirty.detail=true; return;
   }
   if (j.ctrl && !j.ledger){ S.ctrlSkipped++;
     mark('P3',false,`#${j.n} ${j.drug.n} 未完成逐筆登記即取出`);
@@ -248,7 +255,7 @@ function doDispense(j, annotate, units){
         hp.err++; S.errors++; j.pat.harm++;
         const what = risky ? '把外觀相近的品項拿錯' : '拿到同名不同劑量的品項';
         log(`※ ${hp.h.name} 在協助調劑時${what}，你在交付前沒有再核對一次。`,'l-bad');
-        mark('P10', false, `${hp.h.name} 協助調劑時發生錯誤（${risky?'超出授權範圍':'未完成作業簡介'}）`);
+        mark('P10', false, `${hp.h.name} 協助調劑時發生錯誤（${risky?'超出授權範圍':hp.briefed?'已做作業簡介，仍須交付前再核對':'未完成作業簡介'}）`);
         mark('P1', false, `#${j.n} 經幫手之手的品項未於交付前再核對`);
       }
     }
@@ -368,7 +375,7 @@ function doPartial(j){
     j.partial=true; j.status='done'; j.doneAt=S.t; j.partialOnly=true;
     j.drug.have=Math.max(0,j.drug.have-1); j.drug.book=Math.max(0,j.drug.book-1);
     j.pat.given.push({d:j.drug.id,t:S.t});
-    const okCase = j.flag==='stock' || (!j.flag && stock>0 && stock<=3);
+    const okCase = j.flag==='stock' || (!j.flag && (j.short || (stock>0 && stock<=3)));
     if (okCase){
       mark('P4',true,`#${j.n} 數量不足，先給第一劑穩住病人，其餘列入待補`);
       log(`#${String(j.n).padStart(2,'0')} 先給第一劑，其餘待補。`,'l-ok');
@@ -389,9 +396,16 @@ function doReturn(j, reason, txt){
   startWork(`退回並溝通：#${j.n}`, T.ret, ()=>{
     j.status='returned'; j.doneAt=S.t; j.reason=reason; j.txt=txt; S.returned++;
     startReturnVisit(j);
+    // 處方本身沒錯，但架上真的不夠：以「庫存不足」退回並給替代建議，是對的處置
+    const shortOK = !j.flag && j.short && j.drug.have < j.short && reason==='stock';
     S.decisions.push({t:clock(S.t),rx:j.n,pat:j.pat.nm,drug:j.drug.n,
-      reason:REASON_N[reason],txt,right:j.flag===reason,hadFlag:!!j.flag});
-    if (j.flag && j.flag===reason){
+      reason:REASON_N[reason],txt,right:j.flag===reason||shortOK,hadFlag:!!j.flag||shortOK});
+    if (shortOK){
+      mark('P4',true,`#${j.n} 庫存不足以配完整張，以庫存理由退回`);
+      if (txt) mark('P7',true,`#${j.n} 庫存不足退回並附替代建議`); else mark('P7',false,`#${j.n} 庫存不足退回但未提供替代建議`);
+      log(`退回 #${String(j.n).padStart(2,'0')} — 庫存不足。${j.by} 會依你的建議調整。`,'l-ok');
+      S.pending.push({at:S.t+rnd(10,18), src:j, fix:true});
+    } else if (j.flag && j.flag===reason){
       S.blocked++;
       mark('P1',true,`#${j.n} 攔截：${REASON_N[reason]}`);
       if (txt) mark('P7',true,`#${j.n} 退回並附替代建議`); else mark('P7',false,`#${j.n} 退回但未提供替代建議`);

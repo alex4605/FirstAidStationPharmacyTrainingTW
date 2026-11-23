@@ -45,7 +45,7 @@ function openHandover(){
     <div class="scopegrid" id="wakebox">${WAKE.map(w=>
       `<label class="scopeitem"><input type="checkbox" data-w="${w.id}"><span>${w.n}</span></label>`).join('')}</div>
     <div class="field"><label>給夜班的一句話</label>
-      <textarea id="hnote" placeholder="例：傷患04（12歲34kg）所有退燒止痛一律用藥水，成人錠不要動。傷患06 禁 NSAID。冷藏庫每小時記錄溫度，超過 8℃ 立刻叫我。"></textarea></div>
+      <textarea id="hnote" placeholder="例：傷患04（6歲20kg）所有退燒止痛一律用藥水，成人錠不要動。傷患06 禁 NSAID。冷藏庫每小時記錄溫度，超過 8℃ 立刻叫我。"></textarea></div>
     <div class="btnrow"><button class="pbtn" id="hdone" disabled style="opacity:.4">先選擇你今晚怎麼過</button></div>`,
     ()=>{
       let mode=null;
@@ -94,11 +94,11 @@ function runNight(mode, wake, nh){
 
   // 01:15 兒童發燒
   if (has('ped'))
-    push('01:15','傷患04（12 歲、34 kg）發燒','ok','你被叫醒。你自己換算體重、用 120mg/5mL 藥水給藥，然後回去睡。這是你今晚少數幾次完全正確的事。');
+    push('01:15','傷患04（6 歲、20 kg）發燒','ok','你被叫醒。你自己換算體重、用 120mg/5mL 藥水給藥，然後回去睡。這是你今晚少數幾次完全正確的事。');
   else if (H.orders)
-    push('01:15','傷患04（12 歲、34 kg）發燒','ok','你的書面指示上寫著「所有退燒止痛一律用藥水，成人錠不要動」，護理師照做了。你寫下來的那一行救了這一次。');
+    push('01:15','傷患04（6 歲、20 kg）發燒','ok','你的書面指示上寫著「所有退燒止痛一律用藥水，成人錠不要動」，護理師照做了。你寫下來的那一行救了這一次。');
   else
-    push('01:15','傷患04（12 歲、34 kg）發燒','bad','沒有人知道那個孩子不能用成人錠。半夜一點多，成人 500mg 錠被剝成兩半餵了下去。');
+    push('01:15','傷患04（6 歲、20 kg）發燒','bad','沒有人知道那個孩子不能用成人錠。半夜一點多，一整顆成人 500 mg 錠餵了下去——那是 25 mg/kg。');
 
   // 03:30 管制藥品
   if (has('ctrl'))
@@ -149,9 +149,9 @@ function runNight(mode, wake, nh){
 }
 
 /* ---------- 10. AAR ---------- */
-function verdict(k){ const e=S.comp[k],t=e.good+e.bad; if(!t)return 1;
+function verdict(k){ const e=S.comp[k],t=e.good+e.bad; if(!t)return 3;
   const r=e.good/t; return r>=0.8?0:r>=0.5?1:2; }
-const VN=['達成','有條件達成','未達成'];
+const VN=['達成','有條件達成','未達成','本場未評估'];
 function endGame(){
   S.over=true; S.running=false;
   const rxs = S.jobs.filter(j=>j.kind==='rx');
@@ -159,8 +159,14 @@ function endGame(){
   const caught = flagged.filter(j=>j.status==='returned' && j.reason===j.flag);
   const rate = flagged.length?Math.round(caught.length/flagged.length*100):100;
   if (S.counted) mark('P4',true,'完成藥品盤點與效期查核'); else mark('P4',false,'全場未執行藥品盤點');
+  /* 用完不等於管理失敗——藥本來就是要給出去的。
+     失敗的是：明明有補給車來過，你卻沒有替這一項開口。 */
   const outs = DRUGS.filter(d=>d.have<=0);
-  if (outs.length) mark('P4',false,`${outs.map(d=>d.n.split(' ')[0]).join('、')} 已歸零`);
+  const gives = S.jobs.filter(j=>j.kind==='logi' && j.mode==='give' && j.status==='done');
+  const asked = new Set(gives.flatMap(j=>j.pickedAt||[]));
+  const missedAsk = gives.length ? outs.filter(d=>!asked.has(d.id)) : [];
+  if (missedAsk.length) mark('P4',false,`${missedAsk.map(d=>d.n.split(' ')[0]).join('、')} 已歸零，補給到站時未提出請求`);
+  else if (outs.length) log(`白班結束時已歸零：${outs.map(d=>d.n.split(' ')[0]).join('、')}。`,'l-warn');
   if (S.scope) mark('P9',false,`${S.scope} 次選擇超出 EMT-2 執業範圍的處置`);
 
   const rows = Object.keys(COMP).map(k=>{

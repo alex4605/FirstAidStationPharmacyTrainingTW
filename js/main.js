@@ -37,6 +37,8 @@ function layoutClass(){
   de.classList.toggle('narrow', narrow);
   de.classList.toggle('tiny', narrow && w<=430);
   de.classList.toggle('land', narrow && (de.clientHeight||0) < vw);
+  // 筆電寬度（1280–1560）：頂列會擠成兩行，把次要的字收起來
+  de.classList.toggle('compact', !narrow && w<1560);
   return de.className!==was;
 }
 function setTab(t){

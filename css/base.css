@@ -1,4 +1,4 @@
-/* 還開著 STILL OPEN — v1.8 藥師視角（EMT-2）
+/* 還開著 STILL OPEN — v1.9 藥師視角（EMT-2）
    昏暗的地下避難室裡只有調劑檯那盞暖白工作燈是亮的。
    琥珀＝你的作業面／冷青＝冷鏈／紫紅＝管制藥品／各工作類型有自己的色條。 */
 :root{
@@ -202,6 +202,22 @@ button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-v
   background-image:repeating-linear-gradient(180deg,transparent 0 21px,rgba(255,255,255,.022) 21px 22px)}
 .paper::before{content:attr(data-t);position:absolute;top:-1px;right:-1px;background:#2f3830;
   color:var(--ink-dim);font-size:9px;letter-spacing:.18em;padding:1px 7px;font-family:var(--sans)}
+.paper.f-ctrl{border-color:#5c2f3a;background-color:#211a1c}
+.paper.f-ctrl::before{background:var(--ctrl);color:#f6e6ea}
+.paper.f-oral{border-style:dashed;border-color:#4a5560;background-color:#191d21}
+.paper.f-oral::before{background:#3b4650}
+.paper.f-transcribe{background-color:#1c1e22}
+.paper.f-transcribe::before{background:#3a3f5a;color:#d6dcf6}
+.paper.f-chronic{border-color:#4b5a33}
+.paper.f-chronic::before{background:#4b5a33;color:#e8f0d6}
+.paper.f-en{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-size:12.5px}
+.paper.f-en::before{background:#1f4a44;color:#d6f2ec;font-style:normal}
+.paper i.blank{color:var(--ink-faint);font-style:normal;letter-spacing:.1em}
+.txcmp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0}
+.txcmp div{border:1px solid #2f3540;padding:6px 8px;display:flex;flex-direction:column;gap:2px}
+.txcmp span{font-family:var(--sans);font-size:9.5px;letter-spacing:.08em;color:var(--ink-faint)}
+.txcmp div:first-child b{font-family:Georgia,serif;font-style:italic;color:var(--ink-dim)}
+.chip.fmt{border-color:#3a3f5a;color:#aeb6dc}
 .prow{display:grid;grid-template-columns:58px 1fr;gap:8px;padding:1.5px 0}
 .prow span{color:var(--ink-faint);font-family:var(--sans);font-size:10px;letter-spacing:.1em}
 .prow b{font-weight:500;color:var(--ink);word-break:break-word}
@@ -360,10 +376,13 @@ textarea{resize:vertical;min-height:52px;font-family:var(--mono);font-size:11.5p
 .cmrow .cid{font-family:var(--mono);font-weight:700;color:var(--amber)}
 .cmrow .cev{font-size:10.5px;color:var(--ink-faint);display:block;margin-top:3px;font-family:var(--mono);line-height:1.6}
 .verd{font-family:var(--mono);font-size:10.5px;text-align:right;font-weight:700}
-.verd.v0{color:var(--ok)} .verd.v1{color:var(--warn)} .verd.v2{color:var(--bad)}
+.verd.v0{color:var(--ok)} .verd.v1{color:var(--warn)} .verd.v2{color:var(--bad)} .verd.v3{color:var(--ink-faint);font-weight:400}
 
 #tabs{display:none}
 #moreset{display:contents}
+/* 筆電寬度：頂列收成一行 */
+html.compact #topbar{gap:10px;padding:8px 12px}
+html.compact .brand span,html.compact .brand i,html.compact .tbtn .lg{display:none}
 .only-m{display:none}
 
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}

@@ -670,16 +670,20 @@ function renderRx(j){
     return;
   }
   const can=S.atBench&&stock>0;
+  // 試過一次才知道整張配不出來：這時只剩先給一劑、替代、或以庫存不足退回
+  const shortNow = j.short && j.drug.have < j.short;
+  if (shortNow) h+=`<div class="note warn"><b>架上只有 ${j.drug.have} ${j.drug.u}，這張需要 ${j.short} ${j.drug.u}。</b>
+    整張配不出來。可以先給第一劑、改用替代品項，或以「庫存不足」退回並附上建議。</div>`;
   h+=`<div class="acts">
     ${j.ctrl?`<label class="chk ${j.ledger?'on':''}"><input type="checkbox" id="cl-led" ${j.ledger?'checked':''}>
       <span><b>逐筆登記於管制藥品簿冊</b><small>${S.sup.book?'品項、數量、病人、時間、簽章'
         :'<b style="color:var(--warn)">簿冊只剩最後幾頁</b>——再寫下去就得寫在便條紙上，那不算登記'}</small></span></label>
       <label class="chk ${j.dual?'on':''}"><input type="checkbox" id="cl-dual" ${j.dual?'checked':''}>
       <span><b>雙人核對</b><small>${S.t>344&&S.t<400?'此刻護理師均在處置中，找不到第二人。':'請一名護理師到場共同核對。'}</small></span></label>`:''}
-    <button class="act" data-cmd="disp" ${can?'':'disabled'}><span class="an">調劑並交付
-      <span class="aw">${can?(needsCount(j)?(j.drug.f==='口服'?'先數顆數，數好即交付':'先數支數，數好即交付')
+    <button class="act" data-cmd="disp" ${can&&!shortNow?'':'disabled'}><span class="an">調劑並交付
+      <span class="aw">${shortNow?'庫存不足以配完整張':can?(needsCount(j)?(j.drug.f==='口服'?'先數顆數，數好即交付':'先數支數，數好即交付')
   :`${dispTime(j).toFixed(0)} 分鐘${j.pat.child?'・含磨粉分裝':''}`):(stock<=0?'庫存為 0':'必須在藥局內作業')}</span></span><span class="ac">執行</span></button>
-    <button class="act warnb" data-cmd="ann" ${can?'':'disabled'}><span class="an">調劑並註記疑慮
+    <button class="act warnb" data-cmd="ann" ${can&&!shortNow?'':'disabled'}><span class="an">調劑並註記疑慮
       <span class="aw">配出去，但把疑慮寫下來</span></span><span class="ac">執行</span></button>
     <button class="act" data-cmd="ask" ${S.commsDown>S.t?'disabled':''}><span class="an">向 ${j.by} 確認
       <span class="aw">${S.commsDown>S.t?'無線電中斷中，聯絡不上':T.ask+' 分鐘・不退回，先問清楚'}</span></span><span class="ac">詢問</span></button>

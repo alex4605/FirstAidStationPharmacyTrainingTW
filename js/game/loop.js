@@ -29,8 +29,15 @@ function loop(now){
   const raw = Math.min(0.1,(now-last)/1000); last=now;
   if (S.running && !S.over){ const dt = raw*S.speed*MIN_PER_SEC; S.t+=dt; step(dt); }
   tickPickups(S.running && !S.over ? raw*S.speed*MIN_PER_SEC : 0);
-  stepPlayer(raw); render3D(raw); flushUI(); tuneQuality(raw);
+  stepPlayer(raw);
+  /* 對話框蓋住場景時（簡報、事件、AAR），場景只是背景：降到約 10fps 就好，手機會省很多電。
+     這段時間的幀率不拿來判斷要不要降畫質。 */
+  const covered = !$('modal').hidden;
+  if (!covered || now-lastDraw>=100){ render3D(covered ? Math.min(0.1,(now-lastDraw)/1000) : raw); lastDraw=now; }
+  flushUI();
+  if (!covered) tuneQuality(raw);
 }
+let lastDraw=0;
 function step(dt){
   while (S.nextJob<JOBS.length && S.t>=JOBS[S.nextJob].t){
     const spec = JOBS[S.nextJob++];

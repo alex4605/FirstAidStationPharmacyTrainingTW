@@ -156,8 +156,9 @@ function genHelper(i){
   const gendered = s => sex==='f' ? s.replace(/(?<!其)他(?!們)/g,'她') : s.replace(/她(?!們)/g,'他');
   /* 語言：這一區住的人本來就不只講一種話。會講第二種語言的人，
      在有語言障礙的傷患面前，比你多的是耳朵而不是資格。 */
-  const lang = chance(.5) ? pick(['台語','台語','客語','日語','日語','英語','英語','越南語','印尼語','粵語']) : null;
-  const ok = A.ok.slice(), risky = A.risky.slice();
+  let lang = chance(.5) ? pick(['台語','台語','客語','日語','日語','英語','英語','越南語','印尼語','粵語']) : null;
+  if (!lang && A.k==='ngo_intl') lang='英語';      // 國際派駐的人至少會講英語
+  const ok = A.ok.filter(s=>s!=='translate'), risky = A.risky.filter(s=>s!=='translate');
   if (lang) ok.push('translate'); else risky.push('translate');
   /* 每個人待多久、為什麼走。有些人待到你下班，有些人只是路過幫一手。 */
   const STAY = [

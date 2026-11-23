@@ -149,9 +149,9 @@ function runNight(mode, wake, nh){
 }
 
 /* ---------- 10. AAR ---------- */
-function verdict(k){ const e=S.comp[k],t=e.good+e.bad; if(!t)return 1;
+function verdict(k){ const e=S.comp[k],t=e.good+e.bad; if(!t)return 3;
   const r=e.good/t; return r>=0.8?0:r>=0.5?1:2; }
-const VN=['達成','有條件達成','未達成'];
+const VN=['達成','有條件達成','未達成','本場未評估'];
 function endGame(){
   S.over=true; S.running=false;
   const rxs = S.jobs.filter(j=>j.kind==='rx');
@@ -159,8 +159,14 @@ function endGame(){
   const caught = flagged.filter(j=>j.status==='returned' && j.reason===j.flag);
   const rate = flagged.length?Math.round(caught.length/flagged.length*100):100;
   if (S.counted) mark('P4',true,'完成藥品盤點與效期查核'); else mark('P4',false,'全場未執行藥品盤點');
+  /* 用完不等於管理失敗——藥本來就是要給出去的。
+     失敗的是：明明有補給車來過，你卻沒有替這一項開口。 */
   const outs = DRUGS.filter(d=>d.have<=0);
-  if (outs.length) mark('P4',false,`${outs.map(d=>d.n.split(' ')[0]).join('、')} 已歸零`);
+  const gives = S.jobs.filter(j=>j.kind==='logi' && j.mode==='give' && j.status==='done');
+  const asked = new Set(gives.flatMap(j=>j.pickedAt||[]));
+  const missedAsk = gives.length ? outs.filter(d=>!asked.has(d.id)) : [];
+  if (missedAsk.length) mark('P4',false,`${missedAsk.map(d=>d.n.split(' ')[0]).join('、')} 已歸零，補給到站時未提出請求`);
+  else if (outs.length) log(`白班結束時已歸零：${outs.map(d=>d.n.split(' ')[0]).join('、')}。`,'l-warn');
   if (S.scope) mark('P9',false,`${S.scope} 次選擇超出 EMT-2 執業範圍的處置`);
 
   const rows = Object.keys(COMP).map(k=>{

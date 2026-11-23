@@ -108,7 +108,8 @@ function doStocktake(byWho){
   if (low.length) log(`低於兩成五：${low.join('、')}。`,'l-warn');
   narrate('你把數字抄進物資管理紀錄表。第四天了，這是第一份可以拿去報的清單。');
   mark('P4', true, `完成盤點，校正 ${off} 項帳面落差`);
-  if (off>6) mark('P3', false, `盤點前有 ${off} 項帳面與實際不符，代表前幾日的出入庫登記不完整`);
+  // 落差是前三天留下來的，不是你造成的——盤點把它找出來，這件事本身是對的
+  if (off>6) log(`前幾日的出入庫登記不完整：${off} 項對不上。從現在起的帳，是你的帳。`,'l-key');
   dirty.stock=true;
 }
 /* 用法解析：算出這一張處方到底要給幾顆 */

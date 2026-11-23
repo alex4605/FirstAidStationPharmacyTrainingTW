@@ -45,7 +45,7 @@ function openHandover(){
     <div class="scopegrid" id="wakebox">${WAKE.map(w=>
       `<label class="scopeitem"><input type="checkbox" data-w="${w.id}"><span>${w.n}</span></label>`).join('')}</div>
     <div class="field"><label>給夜班的一句話</label>
-      <textarea id="hnote" placeholder="例：傷患04（12歲34kg）所有退燒止痛一律用藥水，成人錠不要動。傷患06 禁 NSAID。冷藏庫每小時記錄溫度，超過 8℃ 立刻叫我。"></textarea></div>
+      <textarea id="hnote" placeholder="例：傷患04（6歲20kg）所有退燒止痛一律用藥水，成人錠不要動。傷患06 禁 NSAID。冷藏庫每小時記錄溫度，超過 8℃ 立刻叫我。"></textarea></div>
     <div class="btnrow"><button class="pbtn" id="hdone" disabled style="opacity:.4">先選擇你今晚怎麼過</button></div>`,
     ()=>{
       let mode=null;
@@ -94,11 +94,11 @@ function runNight(mode, wake, nh){
 
   // 01:15 兒童發燒
   if (has('ped'))
-    push('01:15','傷患04（12 歲、34 kg）發燒','ok','你被叫醒。你自己換算體重、用 120mg/5mL 藥水給藥，然後回去睡。這是你今晚少數幾次完全正確的事。');
+    push('01:15','傷患04（6 歲、20 kg）發燒','ok','你被叫醒。你自己換算體重、用 120mg/5mL 藥水給藥，然後回去睡。這是你今晚少數幾次完全正確的事。');
   else if (H.orders)
-    push('01:15','傷患04（12 歲、34 kg）發燒','ok','你的書面指示上寫著「所有退燒止痛一律用藥水，成人錠不要動」，護理師照做了。你寫下來的那一行救了這一次。');
+    push('01:15','傷患04（6 歲、20 kg）發燒','ok','你的書面指示上寫著「所有退燒止痛一律用藥水，成人錠不要動」，護理師照做了。你寫下來的那一行救了這一次。');
   else
-    push('01:15','傷患04（12 歲、34 kg）發燒','bad','沒有人知道那個孩子不能用成人錠。半夜一點多，成人 500mg 錠被剝成兩半餵了下去。');
+    push('01:15','傷患04（6 歲、20 kg）發燒','bad','沒有人知道那個孩子不能用成人錠。半夜一點多，一整顆成人 500 mg 錠餵了下去——那是 25 mg/kg。');
 
   // 03:30 管制藥品
   if (has('ctrl'))

@@ -6,7 +6,7 @@ const PATIENTS = [
   {id:1,nm:'傷患01',cat:'軍',age:24,sex:'男',wt:72,tag:2,dx:'多發性小碎片傷',hx:[],allergy:null},
   {id:2,nm:'傷患02',cat:'民',age:71,sex:'男',wt:58,tag:2,dx:'氧氣依賴 COPD 急性惡化',hx:['長期吸入型支氣管擴張劑'],allergy:null},
   {id:3,nm:'傷患03',cat:'民',age:29,sex:'女',wt:54,tag:2,dx:'胰島素依賴糖尿病斷藥 4 日',hx:['Insulin 每日'],allergy:null},
-  {id:4,nm:'傷患04',cat:'民',age:12,sex:'女',wt:34,tag:2,dx:'兒童多發碎片傷',hx:[],allergy:null,child:true},
+  {id:4,nm:'傷患04',cat:'民',age:6,sex:'女',wt:20,tag:2,dx:'兒童多發碎片傷',hx:[],allergy:null,child:true},
   {id:5,nm:'傷患05',cat:'民',age:63,sex:'男',wt:66,tag:2,dx:'透析中斷、高血鉀 K 6.9',hx:['每週三次血液透析','Amlodipine 每日','Aspirin 每日','Glimepiride 每日'],allergy:null},
   {id:6,nm:'傷患06',cat:'民',age:69,sex:'男',wt:70,tag:3,dx:'頭皮撕裂傷（服用 Warfarin）',hx:['Warfarin 每日'],allergy:null},
   {id:7,nm:'傷患07',cat:'軍',age:31,sex:'男',wt:78,tag:1,dx:'腹部穿刺傷、失血性休克',hx:[],allergy:null},

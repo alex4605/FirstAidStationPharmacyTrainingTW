@@ -45,6 +45,8 @@ const SCENARIO = (()=>{
   // 乾淨的處方題庫比一場用得到的多，所以每場抽一部分——兩場之間不會長一樣
   const rxClean = sample(rxRaw.filter(j=>!j.stat && !j.flag), rint(18,21));
   const rxBad   = shuffle(rxRaw.filter(j=>!j.stat && j.flag)).slice(0, rint(3,4));
+  // 每一場至少有一張「錯在格式上」的處方（管制箋缺欄、口頭醫囑、轉抄、連續處方、英文處方）
+  if (!rxBad.some(j=>j.lockBy)) rxBad[rxBad.length-1] = sample(rxRaw.filter(j=>!j.stat && j.flag && j.lockBy),1)[0];
   const bagJobs = sample(RX_BAGS, rint(1,2)).flatMap((b,bi)=>b.items.map((it,k)=>
     ({kind:'rx', pid:b.pid, preferBy:b.preferBy, ...it, bag:'B'+(bi+1), bagK:k+1, bagN:b.items.length})));
   const rxAll   = rxStat.concat(rxClean, rxBad, bagJobs);
@@ -59,7 +61,7 @@ const SCENARIO = (()=>{
   const tally={}; PRESCRIBERS.forEach(d=>tally[d.n]={bad:0,ok:0});
   rxStat.concat(rxBad, bagJobs).filter(j=>j.flag).forEach(j=>{
     let n;
-    if (j.preferBy && DOC[j.preferBy] && chance(.8)) n=j.preferBy;
+    if (j.preferBy && DOC[j.preferBy] && (j.lockBy || chance(.8))) n=j.preferBy;   // 格式綁定開立者的題目一定是他開的
     else { const fit=PRESCRIBERS.filter(d=>d.kinds.includes(j.flag));
       const cand=fit.length?fit:PRESCRIBERS;
       n=pick(cand, cand.map(d=>d.err*100)).n; }

@@ -9,7 +9,7 @@ function pushJob(spec){
     j.drug = drugById[j.d]; j.pat = patById[j.pid];
     j.ctrl = j.ctrl || j.drug.st==='ctrl'; j.cold = j.drug.st==='cold';
     j.ledger=false; j.dual=false;
-    log(`${j.by} 開立處方 #${String(j.n).padStart(2,'0')}　${j.pat.nm}　${j.drug.n}`, j.ctrl?'l-key':(j.stat?'l-warn':''));
+    log(`${j.by} 開立處方 #${String(j.n).padStart(2,'0')}　${j.pat.nm}　${j.enName||j.drug.n}`, j.ctrl?'l-key':(j.stat?'l-warn':''));
   } else if (j.kind==='con'){
     log(`${j.who} 到領藥窗口找你諮詢。`, 'l-con');
   } else if (j.kind==='edu'){

@@ -8,7 +8,7 @@ const PATIENTS = [
   {id:3,nm:'傷患03',cat:'民',age:29,sex:'女',wt:54,tag:2,dx:'胰島素依賴糖尿病斷藥 4 日',hx:['Insulin 每日'],allergy:null},
   {id:4,nm:'傷患04',cat:'民',age:6,sex:'女',wt:20,tag:2,dx:'兒童多發碎片傷',hx:[],allergy:null,child:true},
   {id:5,nm:'傷患05',cat:'民',age:63,sex:'男',wt:66,tag:2,dx:'透析中斷、高血鉀 K 6.9',hx:['每週三次血液透析','Amlodipine 每日','Aspirin 每日','Glimepiride 每日'],allergy:null},
-  {id:6,nm:'傷患06',cat:'民',age:69,sex:'男',wt:70,tag:3,dx:'頭皮撕裂傷（服用 Warfarin）',hx:['Warfarin 每日'],allergy:null},
+  {id:6,nm:'傷患06',cat:'民',age:69,sex:'男',wt:70,tag:3,dx:'頭皮撕裂傷，止血困難',hx:[],allergy:null},
   {id:7,nm:'傷患07',cat:'軍',age:31,sex:'男',wt:78,tag:1,dx:'腹部穿刺傷、失血性休克',hx:[],allergy:null},
   {id:8,nm:'傷患08',cat:'民',age:33,sex:'女',wt:63,tag:1,dx:'產後出血（地下室生產）',hx:['G2P2'],allergy:null},
   {id:9,nm:'傷患09',cat:'民',age:25,sex:'男',wt:68,tag:2,dx:'抗癲癇藥中斷、癲癇重積後意識不清',hx:['Valproate 長期','已置放鼻胃管'],allergy:null},
@@ -18,16 +18,34 @@ const PATIENTS = [
   {id:13,nm:'傷患13',cat:'民',age:5,sex:'男',wt:19,tag:2,dx:'腹瀉脫水（避難收容所）',hx:[],allergy:null,child:true},
   {id:14,nm:'傷患14',cat:'民',age:58,sex:'男',wt:74,tag:3,dx:'高血壓斷藥、頭暈',hx:['Amlodipine 每日','Metformin 每日','Aspirin 每日'],allergy:null},
   {id:15,nm:'傷患15',cat:'民',age:7,sex:'男',wt:23,tag:3,dx:'手臂二度燒燙傷（熱水）',
-   hx:['G6PD 缺乏症（蠶豆症）'],allergy:null,child:true},
-  {id:16,nm:'傷患16',cat:'民',age:31,sex:'女',wt:58,tag:3,dx:'背部擦挫傷，哺乳中（嬰兒 2 個月）',
-   hx:['純哺乳，一天 8 次'],allergy:null},
+   hx:[],allergy:null,child:true},
+  {id:16,nm:'傷患16',cat:'民',age:31,sex:'女',wt:58,tag:3,dx:'背部擦挫傷',
+   hx:[],allergy:null},
   {id:17,nm:'傷患17',cat:'軍',age:27,sex:'男',wt:80,tag:2,dx:'左下肢開放性骨折、疼痛劇烈',
    hx:[],allergy:'Penicillin 過敏（幼時全身疹，未曾休克）'},
   {id:18,nm:'傷患18',cat:'民',age:74,sex:'女',wt:49,tag:3,dx:'心房顫動、長期抗凝血中',
    hx:['Warfarin 每日','Amiodarone 每日'],allergy:null},
 ];
+/* 藥局紀錄上只有已知的事。下面這些，要開口問了才會知道——
+   病人不會主動說他在吃「血液稀釋的藥」、在餵母奶、或今天早上自己吃過兩顆普拿疼。
+   每一位都可以問；問了才知道有沒有。 */
+const PT_ASK = {
+  1:['今天早上自己吃了兩顆家裡帶來的普拿疼（Acetaminophen 500 mg）'],
+  2:['在家長期吃 Prednisolone 5 mg，一天一顆，吃了兩年'],
+  3:['最後一次打胰島素是四天前；這兩天吃得很少'],
+  4:['（家屬）她吞藥丸會吐，平常都吃藥水'],
+  5:['上一次透析是五天前；這幾天尿很少'],
+  6:['有在吃「血液稀釋的藥」——藥袋上寫 Warfarin，每天一顆'],
+  9:['（家屬）他平常吃 Valproate，一天兩次，已經四天沒吃了'],
+  11:['（家屬）她在家睡不好時會吃半顆安眠藥，藥名不知道'],
+  13:['（家屬）昨晚鄰居給了一顆止瀉藥，已經吃了'],
+  14:['上次吃 Amlodipine 是四天前；自己帶了半排別家廠牌的'],
+  15:['（家屬）他有蠶豆症（G6PD 缺乏症），出生時篩檢出來的'],
+  16:['純哺乳中，寶寶 2 個月，一天餵 8 次'],
+  18:['最近刷牙牙齦會流血，腳上的瘀青變多了'],
+};
 const patById = Object.fromEntries(PATIENTS.map(p=>[p.id,p]));
-PATIENTS.forEach(p=>{p.given=[]; p.harm=0; p.educated=[];});
+PATIENTS.forEach(p=>{p.given=[]; p.harm=0; p.educated=[]; p.ask=PT_ASK[p.id]||[]; p.asked=false;});
 /* ---------- 2b. 開立者 ----------
    第四天，能站的人都被排上了。處方的品質跟開立的人有關：
    每天在開藥的人幾乎不會錯；被調來代打的人，錯在可以預測的地方。

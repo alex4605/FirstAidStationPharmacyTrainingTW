@@ -635,7 +635,8 @@ function drawFridge(){
   M.ftex.needsUpdate=true;
 }
 function stepPlayer(dt){
-  const k=player.keys;
+  walkStep();                                   // 走路的作業進行中：人照進度往目的地走
+  const k=(S.task&&S.task.walk)?{}:player.keys;
   if (k.q) player.yaw+=dt*1.5;
   if (k.e) player.yaw-=dt*1.5;
   let mx=0,mz=0;

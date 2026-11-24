@@ -49,6 +49,8 @@ function pushJob(spec){
   } else if (j.kind==='cbr'){
     j.step = 0; j.res = [];
     log(`※※ ${j.title}　—　人還在除污區外面。`, 'l-bad');
+  } else if (j.kind==='walk'){
+    log(j.sub==='bed' ? `${j.who}：「藥師，#${String(j.src.n).padStart(2,'0')} 我要給了，你過來一起核對一下？」` : '該記錄冷藏溫度了（冷藏庫前的紀錄表）。', 'l-key');
   } else if (j.kind==='fu'){
     log(`※ ${j.who} 回來找你：#${String(j.src.n).padStart(2,'0')} ${j.src.pat.nm} 的事。`, 'l-bad');
   } else if (j.kind==='help'){
@@ -271,6 +273,7 @@ function doDispense(j, annotate, units){
     if (j.cold && S.fridge>8) mark('P5',false,`#${j.n} 於冷鏈異常期間仍配發冷藏品項`);
     if (j.ctrl && j.ledger){ S.ctrlLedger.push({t:clock(S.t),d:j.drug.n,p:j.pat.nm,dual:j.dual});
       mark('P3',true,`#${j.n} ${j.drug.n} 已逐筆登記${j.dual?'、雙人核對':'（無雙人核對）'}`); }
+    if (needsBedside(j)) queueBedside(j);     // 高警訊藥品：要走到床邊再核對一次
     dirty.q=dirty.stock=dirty.detail=true;
   });
 }

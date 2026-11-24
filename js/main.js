@@ -79,7 +79,10 @@ function bind(){
   $('btn-auto').onclick=()=>{ S.autopause=!S.autopause;
     $('btn-auto').setAttribute('aria-pressed',S.autopause?'true':'false');
     log(S.autopause?'新事件自動暫停：開':'新事件自動暫停：關'); };
-  $('btn-bench').onclick=()=>{ player.pos=[BENCH[0],BENCH[1]+2.5]; player.yaw=Math.PI; player.wide=false;
+  $('btn-bench').onclick=()=>{ player.wide=false;
+    if (!S.task && !atPlace('pharm')){ goTo('pharm'); return; }   // 走回去要時間
+    if (S.task && !atPlace('pharm')) return;
+    player.pos=[BENCH[0],BENCH[1]+2.5]; player.yaw=Math.PI;
     log('回到調劑檯。'); };
   // 藥品架側欄
   $('stock-rail').onclick=()=>{ shelfUI.collapsed=!shelfUI.collapsed;
@@ -138,6 +141,8 @@ function bind(){
     if (jb){ S.sel=+jb.dataset.j; dirty.q=dirty.detail=dirty.stock=true;
       if (MOBILE()) setTab('act');                 // 手機：點了工作就直接帶你到處置面板
       return; }
+    const wk=e.target.closest('[data-walk]');
+    if (wk){ goTo(wk.dataset.walk); return; }
     const c=e.target.closest('[data-cmd]'); if (!c) return;
     const cmd=c.dataset.cmd;
     if (cmd==='bgstart') startBg(c.dataset.bgid);

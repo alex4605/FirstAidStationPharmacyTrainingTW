@@ -91,7 +91,7 @@ function step(dt){
     if (S.fuel<=0){ S.genOn=false; log('※ 發電機油用罄。','l-bad'); } }
   S.fatigue = Math.min(100,S.fatigue+dt*0.03);
   tickBg(dt); tickHelperWork(dt); tickChatter(dt); tickPatrol(dt);
-  tickCold(dt); tickThreat(dt);
+  tickCold(dt); tickThreat(dt); tickRounds();
   for (const j of pending()){
     if (j.kind!=='rx') continue;
     const age = S.t-j.issued;

@@ -28,7 +28,7 @@ function openDoc(){
       <br>・<b>傷患04 改為 6 歲、20 kg。</b>原本 12 歲 34 kg 吞一顆 500 mg 錠（約 15 mg/kg）其實在範圍內，題目不成立。相關劑量、兒童藥水毫升數、夜間事件一起改。
       <br>・<b>傷患09 的 Lorazepam 改成抗癲癇藥問題。</b>他有鼻胃管，途徑不是問題；問題是規則給 BZD 取代不了中斷的 Valproate，還會掩蓋意識評估。
       <br>・<b>高血鉀諮詢</b>：降鉀最有效的是 Insulin＋葡萄糖（要與傷患03 權衡）、可加 Terbutaline 霧化；Sod. Bicarbonate 只在合併酸中毒時考慮；真正需要的是透析。
-      <br>・<b>顯影劑與 Metformin</b>：依腎功能決定，eGFR ≥30 且無急性腎損傷可以不停。
+      <br>・<b>顯影劑與 Metformin 那題換掉了</b>：站內只有攜帶式 X 光與超音波，不會有人要打顯影劑。改成放射師幫收容所的嘔吐病人問 Metformin 要不要照吃——生病日的用藥規則。
       <br>・<b>Lansoprazole 鼻胃管</b>：原本說「酸性果汁會破壞腸溶衣」是錯的；問題在磨粉，不在配什麼液體。
       <br>・<b>Amiodarone</b>：改為「仿單指定 5% 葡萄糖稀釋」，不再說生理食鹽水「會沉澱」。
       <br>・<b>Metoclopramide</b> 那張不再把 Lansoprazole 當成替代止吐藥；<b>Warfarin 病人</b>補上大量 Acetaminophen 也可能讓 INR 上升；

@@ -43,6 +43,18 @@ function shuffle(arr){ const a=arr.slice();
   for (let i=a.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   return a; }
 const sample = (arr,n)=>shuffle(arr).slice(0,n);
+/* 選項的顯示順序。題庫裡正解大多寫在第一個、複選題的對的全排在前面——
+   不打亂的話，玩家不用懂藥也猜得到。這裡用「種子＋題目」決定順序，
+   不動主亂數（主亂數的抽取順序會隨玩家操作而變），所以同一個種子、同一題，順序永遠一樣。 */
+function keyedShuffle(arr, key){
+  let h=2166136261;
+  const s=SEED+'|'+key;
+  for (let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  const r=()=>{ h=Math.imul(h^h>>>15,2246822507); h=Math.imul(h^h>>>13,3266489909); h^=h>>>16; return (h>>>0)/4294967296; };
+  const a=arr.slice();
+  for (let i=a.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
 /** 把一組事件平均鋪在 [from,to] 之間，加上抖動，回傳排序後的時間 */
 function spread(n, from, to, jitter){
   const step=(to-from)/n, out=[];

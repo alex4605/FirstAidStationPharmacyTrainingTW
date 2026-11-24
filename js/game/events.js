@@ -5,11 +5,17 @@
 /* ---------- 8b. 突發事件池 ----------
    每一場抽 3–5 個，時間與順序都不一樣。每一個都要你在幾秒內決定一件事，
    而且每一個都會在某個地方回來找你。 */
+/* 對話框裡的選項也要打亂：題庫的寫法是把對的放在第一個 */
+function shuffleOpts(key){
+  const bs=[...$('sheet').querySelectorAll('.opt')]; if (bs.length<2) return;
+  const par=bs[0].parentNode, anchor=bs[bs.length-1].nextSibling;
+  keyedShuffle(bs, key).forEach(b=>par.insertBefore(b, anchor));
+}
 function evtChoice(title, kicker, body, opts, cls){
   openModal(`<h1>${title}</h1><p class="kicker">${clock(S.t)} · ${kicker}</p>${body}
     ${opts.map((o,i)=>`<button class="opt" data-c="${i}"><b>${o.t}</b>${o.s?`<span>${o.s}</span>`:''}</button>`).join('')}
     <div class="btnrow"></div>`,
-    ()=>{ $('sheet').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    ()=>{ shuffleOpts('evt|'+title); $('sheet').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
       const o=opts[+b.dataset.c]; closeModal(); o.go&&o.go(); }); });
 }
 function fireEvent(id){
@@ -160,7 +166,7 @@ function fireEvent(id){
       <button class="opt" data-c="c"><b>從其他批號補上，讓帳面對得起來</b>
         <span>帳面會很好看。</span></button>
       <div class="btnrow"></div>`,
-      ()=>{ $('sheet').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+      ()=>{ shuffleOpts('shortage'); $('sheet').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
         const c=b.dataset.c;
         if (c==='a'){ mark('P3',true,'發現管制藥品短少後立即清點、登記異常並通報');
           log('已停止領用、重新清點並通報站長。','l-ok');
@@ -210,7 +216,7 @@ function openColdChoice(){
     <button class="opt" data-c="tt"><b>只保破傷風疫苗，其餘放棄</b><span>${drugById.tt.have} ${drugById.tt.u}移入保冷箱。Insulin 與 Oxytocin 脫鏈報廢。</span></button>
     <div class="field"><label>決策理由（會進入紀錄與 AAR）</label>
       <textarea id="coldwhy" placeholder="例：TT 影響 12 名以上外傷患；Insulin 只影響 2 人，且其中一人的存活路徑本來就是後送透析。"></textarea></div>`,
-    ()=>{ $('sheet').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    ()=>{ shuffleOpts('cold'); $('sheet').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
       const c=b.dataset.c, why=esc($('coldwhy').value.trim());
       if (c==='ups'){ S.fridgeBackup=true; log('冰箱改由行動電源供電。通訊與監測改用備援。','l-cold'); }
       if (c==='ice'){ if (S.iceReady){ S.iceBags+=90; log('投入預先備妥的保冷袋。','l-cold'); }

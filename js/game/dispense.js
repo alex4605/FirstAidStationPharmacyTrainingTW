@@ -5,6 +5,11 @@
 function pending(){ return S.jobs.filter(j=>j.status==='pending'); }
 function pushJob(spec){
   const j = {...spec, n:S.nextN++, issued:S.t, status:'pending'};
+  // 打亂選項順序（每張工作單一份，不改到題庫本身）
+  const key = (j.kind||'')+'|'+(j.title||j.topic||j.q||j.id||j.n);
+  if (j.opts) j.opts = keyedShuffle(j.opts, key);
+  if (j.pts)  j.pts  = keyedShuffle(j.pts,  key);
+  if (j.steps) j.steps = j.steps.map((s,i)=>({...s, opts:keyedShuffle(s.opts, key+'|'+i)}));
   if (j.kind==='rx'){
     j.drug = drugById[j.d]; j.pat = patById[j.pid];
     j.ctrl = j.ctrl || j.drug.st==='ctrl'; j.cold = j.drug.st==='cold';

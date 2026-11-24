@@ -1,4 +1,4 @@
-/* 還開著 STILL OPEN — v1.9 藥師視角（EMT-2）
+/* 還開著 STILL OPEN — v1.10 藥師視角（EMT-2）
    昏暗的地下避難室裡只有調劑檯那盞暖白工作燈是亮的。
    琥珀＝你的作業面／冷青＝冷鏈／紫紅＝管制藥品／各工作類型有自己的色條。 */
 :root{
@@ -112,6 +112,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-v
 .age{position:absolute;right:11px;bottom:7px;font-size:9.5px;color:var(--ink-faint)}
 .age.late{color:var(--warn)}
 .kind{font-family:var(--mono);font-size:9px;letter-spacing:.14em;padding:0 5px;border:1px solid;margin-right:6px}
+.kind.fu{color:var(--bad);border-color:var(--bad)} .job.k-fu{border-left-color:var(--bad)}
 .kind.rx{color:var(--k-rx);border-color:var(--k-rx)} .kind.con{color:var(--k-con);border-color:var(--k-con)}
 .kind.edu{color:var(--k-edu);border-color:var(--k-edu)} .kind.emt{color:var(--k-emt);border-color:var(--k-emt);background:#2a1211}
 .kind.ass{color:var(--k-ass);border-color:var(--k-ass)}

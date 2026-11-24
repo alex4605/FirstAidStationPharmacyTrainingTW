@@ -49,13 +49,15 @@ function pushJob(spec){
   } else if (j.kind==='cbr'){
     j.step = 0; j.res = [];
     log(`※※ ${j.title}　—　人還在除污區外面。`, 'l-bad');
+  } else if (j.kind==='fu'){
+    log(`※ ${j.who} 回來找你：#${String(j.src.n).padStart(2,'0')} ${j.src.pat.nm} 的事。`, 'l-bad');
   } else if (j.kind==='help'){
     j.stage='meet'; j.scope=[]; j.verified=null; j.briefed=false;
     log(`避難民眾 ${j.h.name} 走到領藥窗口：「${j.h.say.slice(0,18)}…」`, 'l-key');
   }
   S.jobs.push(j);
   if (S.sel==null || pending().length===1) S.sel = j.n;
-  if (S.autopause && S.running && (j.kind==='emt' || j.kind==='emt2' || j.kind==='cbr' || j.kind==='help' || j.kind==='logi' || j.kind==='lang' || j.stat || j.kind==='con')){
+  if (S.autopause && S.running && (j.kind==='emt' || j.kind==='emt2' || j.kind==='cbr' || j.kind==='help' || j.kind==='logi' || j.kind==='lang' || j.stat || j.kind==='con' || j.kind==='fu')){
     S.running = false; syncSpeed();
     if (MOBILE()) setTab('act');
   }
@@ -126,6 +128,8 @@ function renderBg(){
 
 function startWork(name, min, then){
   if (min<=0){ if (then) then(); dirty.detail=true; return; }   // 不佔時間的工作直接完成
+  // 手上的事被突發事件打斷：先做插進來的，做完再回到原本那一件（不然原本那件的收尾——例如「回到藥局」——會消失）
+  if (S.task){ (S.taskStack=S.taskStack||[]).push(S.task); log(`暫停「${S.task.n}」，先處理「${name}」。`); }
   S.task={n:name,remain:min,total:min,then}; dirty.detail=true;
   // 你一旦動手，時間就要走。否則「新事件自動暫停」會讓進度條停在原地不動。
   if (!S.over && $('modal').hidden && !S.running){ S.running=true; syncSpeed(); }
@@ -222,9 +226,9 @@ function doDispense(j, annotate, units){
       // 你問了、對方堅持、你配了並且寫下來——這是藥師能做到的全部，責任已經移轉
       mark('P1',true,`#${j.n} 已提出疑慮（${REASON_N[j.flag]}），開立者堅持原處方，配發並完整註記`);
       mark('P7',true,`#${j.n} 疑慮、對方回覆與最終決定都留下了紀錄`);
-      S.errors++; j.pat.harm++;
+      harm(j,'annotated');
       log(`#${String(j.n).padStart(2,'0')} 依 ${j.by} 堅持配發，疑慮已註記。後果不在你這一端。`,'l-warn');
-    } else if (j.flag){ S.errors++; j.pat.harm++;
+    } else if (j.flag){ harm(j,'rx');
       mark('P1',false,`#${j.n} ${j.pat.nm}：${REASON_N[j.flag]} 未被攔截`
         + (j.insisted?'（你問過了，對方堅持——但你沒有把疑慮寫下來）':''));
       if (['dose','route','ped','sig'].includes(j.flag)) mark('P2',false,`#${j.n} 劑型或劑量問題流出藥局`);
@@ -236,7 +240,7 @@ function doDispense(j, annotate, units){
     }
     // 沒有辨識就上架的外來品項：含量可能不是你以為的那個
     if (j.drug.unverified>0 && !j.flag && chance(.38)){
-      S.errors++; j.pat.harm++;
+      harm(j,'unverified');
       mark('P2', false, `#${j.n} 取到未經辨識的外來品項，含量與本站慣用規格不同`);
       mark('P4', false, `未辨識即上架的後果出現在 ${j.pat.nm} 身上`);
       log(`※ #${String(j.n).padStart(2,'0')} 這一支是外援送來的，含量跟我們慣用的不一樣——`
@@ -257,7 +261,7 @@ function doDispense(j, annotate, units){
       const risky = hp.h.risky.includes('dispense');
       const chance = risky ? 0.45 : (hp.briefed ? 0.03 : 0.18);
       if (rng() < chance){
-        hp.err++; S.errors++; j.pat.harm++;
+        hp.err++; harm(j,'helper');
         const what = risky ? '把外觀相近的品項拿錯' : '拿到同名不同劑量的品項';
         log(`※ ${hp.h.name} 在協助調劑時${what}，你在交付前沒有再核對一次。`,'l-bad');
         mark('P10', false, `${hp.h.name} 協助調劑時發生錯誤（${risky?'超出授權範圍':hp.briefed?'已做作業簡介，仍須交付前再核對':'未完成作業簡介'}）`);
@@ -360,7 +364,7 @@ function doSubstitute(j, altId, verbal, txt){
     } else if (j.flag){
       mark('P2',false,`#${j.n} 察覺有問題，但換成 ${alt.n.split(' ')[0]} 並沒有解決（${REASON_N[j.flag]}）`);
       log(`※ #${String(j.n).padStart(2,'0')} 換了品項，但原本的問題還在。`,'l-bad');
-      S.errors++; j.pat.harm++;
+      harm(j,'sub');
     } else if (stock<=0){
       mark('P4',true,`#${j.n} 原品項缺貨，以同類替代並完成換算`);
       log(`#${String(j.n).padStart(2,'0')} 原品項缺貨，改用 ${alt.n.split(' ')[0]}。`,'l-ok');
@@ -385,7 +389,7 @@ function doPartial(j){
       mark('P4',true,`#${j.n} 數量不足，先給第一劑穩住病人，其餘列入待補`);
       log(`#${String(j.n).padStart(2,'0')} 先給第一劑，其餘待補。`,'l-ok');
     } else if (j.flag){
-      S.errors++; j.pat.harm += j.ctrl?2:1;
+      harm(j,'partial', j.ctrl?2:1);
       mark('P1',false,`#${j.n} 問題不在數量（${REASON_N[j.flag]}），先給一劑仍然把問題給了出去`);
       log(`※ #${String(j.n).padStart(2,'0')} 先給了第一劑——但這張的問題不是數量。`,'l-bad');
       noticePattern(j.by);

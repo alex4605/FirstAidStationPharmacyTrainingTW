@@ -118,6 +118,15 @@ function runNight(mode, wake, nh){
     else
       push('04:50','冷藏庫溫度再次上升','bad','沒有人被交代要看溫度。早上你走過去的時候，面板顯示 14.6℃，已經這樣好幾個小時了。');
   }
+  // 白天沒處理好的錯誤，晚上會再出現——這一段引用的是你實際犯的那一筆
+  unresolvedFollowUps().slice(0,2).forEach((f,i)=>{
+    const s=f.src, dn=(s.enName||s.drug.n).split(' ')[0];
+    const watched = has('doubt') || (H.orders && H.note);
+    if (watched) push(i?'03:40':'02:20', `${s.pat.nm} 的狀況（#${String(s.n).padStart(2,'0')} ${dn}）`, 'mid',
+      `夜班照你留下的交代特別看了他。白天那筆沒有處理完整，但有人在看，狀況沒有再惡化。`);
+    else push(i?'03:40':'02:20', `${s.pat.nm} 的狀況（#${String(s.n).padStart(2,'0')} ${dn}）`, 'bad',
+      `白天那筆 ${dn} 沒有停藥評估、也沒有寫進紀錄。夜班不知道要看他，直到他的狀況變差才被發現。`);
+  });
   // 疲勞
   let fatigue;
   if (mode==='awake'){ fatigue=Math.min(100,S.fatigue+42);
@@ -133,6 +142,8 @@ function runNight(mode, wake, nh){
     else { push('06:00','天亮','ok','你睡滿了，而且站還在運轉。你昨天留下的東西撐住了今晚。');
       mark('P8', true, '完整的書面交代與適當授權，使夜間作業在無藥師下仍安全'); }
   }
+  // 夜裡的時間軸：20:00 之後的排前面，跨過午夜的接在後面
+  const nk=t=>(t<'12:00'?'1':'0')+t; ev.sort((a,b)=>nk(a.t)<nk(b.t)?-1:1);
   S.night={mode,wake,ev,fatigue};
   ev.forEach(e=>{ if(e.ok==='bad') mark('P8',false,`${e.t} ${e.title}：未能安全處理`);
     else if (e.ok==='ok') mark('P8',true,`${e.t} ${e.title}：安全處理`); });
@@ -292,6 +303,12 @@ function endGame(){
       把人放到他不熟的位置上，錯誤會落在可以預測的那幾格裡——知道會落在哪幾格，正是藥師站在這裡的理由。</span></div>
     <h2>帶著問題流出藥局的處方</h2>
     <div class="tblwrap"><table><tr><th>處方</th><th>品項</th><th>問題</th></tr>${missRows}</table></div>
+    <h2>錯誤之後</h2>
+    <div class="tblwrap"><table><tr><th>回來的時間</th><th>誰回來找你</th><th>發生什麼</th><th>你的處理</th></tr>${
+      S.jobs.filter(j=>j.kind==='fu').map(j=>{ const o=j.status==='done'?j.opts[j.picked]:null;
+        return `<tr><td>${clock(j.issued)}</td><td>${j.who}<br><span style="color:var(--ink-faint);font-size:11px">回到 #${String(j.src.n).padStart(2,'0')}</span></td>
+          <td>${j.q}</td><td class="verd ${!o?'v2':o.v==='good'?'v0':o.v==='mid'?'v1':'v2'}">${!o?'沒有處理':o.v==='good'?'如實處理':o.v==='mid'?'紀錄未跟上':'處理不當'}</td></tr>`; }).join('')
+      || '<tr><td colspan="4">今天沒有錯誤回來找你。</td></tr>'}</table></div>
     <h2>退回決策回放</h2>
     <div class="tblwrap"><table><tr><th>時間</th><th>處方</th><th>你的理由</th><th>判定</th></tr>${dec}</table></div>
     <h2>跨職類諮詢</h2>

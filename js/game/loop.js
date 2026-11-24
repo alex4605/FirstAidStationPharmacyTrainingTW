@@ -60,6 +60,7 @@ function step(dt){
     S.pending.splice(i,1);
     if (c.follow){ pushJob({...FOLLOWUP[c.follow], t:S.t}); log('先前的諮詢回覆帶回了一張處方。','l-warn'); continue; }
     if (c.steal){ doTheft(c.steal); continue; }
+    if (c.fu){ spawnFollowUp(c.fu); continue; }      // 給錯的藥，從別人的嘴裡回來
     if (c.idn){ pushJob({kind:'idn', t:S.t, ...c.idn}); continue; }
     if (c.raidLoss){                      // 警報時沒鎖的那個櫃子
       const t=DRUGS.filter(d=>d.st==='ctrl'&&d.have>0);
@@ -83,7 +84,8 @@ function step(dt){
       log(`${b.by} 依你的建議開立修正處方。`,'l-ok'); }
   }
   if (S.task){ S.task.remain-=dt;
-    if (S.task.remain<=0){ const f=S.task.then; S.task=null; if(f) f(); }
+    if (S.task.remain<=0){ const f=S.task.then; S.task=(S.taskStack&&S.taskStack.length)?S.taskStack.pop():null;
+      if (S.task) log(`回到「${S.task.n}」。`); if(f) f(); }
     dirty.detail=true; }
   if (S.genOn && S.fuel>0){ S.fuel=Math.max(0,S.fuel-dt*0.052);
     if (S.fuel<=0){ S.genOn=false; log('※ 發電機油用罄。','l-bad'); } }
@@ -97,6 +99,10 @@ function step(dt){
       mark('P1',false,`#${j.n}（STAT）等待逾 30 分鐘`);
       log(`#${String(j.n).padStart(2,'0')} 為立即處方，已等待 ${Math.round(age)} 分鐘。`,'l-warn'); }
   }
+  // 19:00：夜班的護理師開始問了
+  if (S.t>=660 && !S.packReady && !S.eveAsked){ S.eveAsked=true;
+    say('周護理師','藥師，夜班的備藥包好了嗎？你不在的時候，我們就只有那幾包。',5200);
+    log('周護理師在問夜班備藥包。','l-warn'); }
   if (S.t>=720 && !S.over) openHandover();
   dirty.top=dirty.q=true;
 }

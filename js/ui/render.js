@@ -67,7 +67,7 @@ function renderTop(){
     : `Insulin ${drugById.ins.have} · TT ${drugById.tt.have} · Oxytocin ${drugById.oxy.have}`;
 }
 const qFilter={kind:'all', pendOnly:false};
-const KN={rx:['RX','rx'],con:['CON','con'],edu:['EDU','edu'],emt:['EMT','emt'],emt2:['EMT','emt'],logi:['物流','logi'],lang:['語言','lang'],
+const KN={fu:['後續','fu'],rx:['RX','rx'],con:['CON','con'],edu:['EDU','edu'],emt:['EMT','emt'],emt2:['EMT','emt'],logi:['物流','logi'],lang:['語言','lang'],
   ass:['ASS','ass'],cbr:['CBRNE','cbr'],help:['幫手','help'],crowd:['現場','crowd'],idn:['辨識','idn']};
 function renderHelpers(){
   const hm=$('hmeta');
@@ -98,7 +98,7 @@ function renderQueue(){
   S.jobs.forEach(j=>{ const k=j.kind==='emt2'?'emt':j.kind;
     counts[k]=counts[k]||{all:0,p:0}; counts[k].all++;
     if (j.status==='pending'){ counts[k].p++; pend++; } });
-  const FK=[['all','全部'],['rx','處方'],['con','諮詢'],['edu','衛教'],['emt','EMT'],
+  const FK=[['all','全部'],['fu','後續'],['rx','處方'],['con','諮詢'],['edu','衛教'],['emt','EMT'],
     ['ass','支援'],['logi','物流'],['idn','辨識'],['lang','語言'],['crowd','現場'],['cbr','CBRNE'],['help','幫手']];
   put('qfilter', FK.map(([k,n])=>{
     if (k==='all') return `<button class="qf" data-qf="all" aria-pressed="${qFilter.kind==='all'}">全部<b>${pend}</b></button>`;
@@ -133,6 +133,10 @@ function renderQueue(){
         j.byHelper&&j.status==='done'?`<span class="chip">${j.byHelper}配</span>`:'',
         j.status==='done'?(j.flag?'<span class="chip err">給藥事件</span>':'<span class="chip done">已調劑</span>'):'',
         j.status==='returned'?'<span class="chip ret">已退回</span>':''].join('');
+    } else if (j.kind==='fu'){
+      title=`#${String(j.src.n).padStart(2,'0')} ${j.src.pat.nm} 的後續`; sub=j.role; who=j.who;
+      if (j.status==='done'){ const v=j.opts[j.picked].v;
+        chips=`<span class="chip ${v==='good'?'done':v==='mid'?'ret':'err'}">${v==='good'?'已處理':v==='mid'?'紀錄未跟上':'處理不當'}</span>`; }
     } else if (j.kind==='con'){
       title=j.q.length>26?j.q.slice(0,26)+'…':j.q; sub=j.role; who=j.who;
       if (j.status==='done'){ const v=j.opts[j.picked].v;
@@ -180,6 +184,7 @@ function renderQueue(){
     const pat = j.kind==='rx' ? `${j.pat.age}歲${j.pat.sex}・${j.pat.wt}kg・${j.pat.dx}`
       : j.kind==='edu' ? `${j.pat.age}歲${j.pat.sex}・${j.pat.dx}`
       : j.kind==='con' ? (j.ctx||'')
+      : j.kind==='fu' ? j.q.slice(0,34)+'…'
       : j.kind==='ass' ? j.ask.slice(0,38)+'…'
       : j.kind==='logi' ? (j.mode==='give'?j.c.give:j.c.take).slice(0,34)+'…'
       : j.kind==='idn' ? j.items.map(x=>x.brand.split('（')[0]).join('、').slice(0,34)+'…'
@@ -284,6 +289,7 @@ function renderDetail(){
   if (j.kind==='crowd') return renderCrowd(j);
   if (j.kind==='idn') return renderIdn(j);
   if (j.kind==='help') return renderHelp(j);
+  if (j.kind==='fu') return renderFu(j);
 }
 
 /* 諮詢與 EMT-2 求援共用同一種版型：情境 → 單選 → 回饋。
@@ -568,7 +574,8 @@ function renderRx(j){
       <div class="kv"><span>過敏史</span><b class="${p.allergy?'alert':''}">${p.allergy||'無紀錄'}</b></div>
       <div class="kv"><span>長期用藥</span><b>${p.hx.length?p.hx.join('、'):'無紀錄'}</b></div>
       <div class="kv"><span>本站已給</span><b>${p.given.length?p.given.map(g=>drugById[g.d].n.split(' ')[0]+' '+clock(g.t)).join('、'):'尚未給藥'}</b></div>
-      <div class="kv"><span>已衛教</span><b>${p.educated.length?p.educated.join('、'):'無'}</b></div></div>
+      <div class="kv"><span>已衛教</span><b>${p.educated.length?p.educated.join('、'):'無'}</b></div>${
+        (p.events||[]).length?`<div class="kv"><span>事件</span><b class="alert">${p.events.map(e=>e.t+' '+e.txt).join('、')}</b></div>`:''}</div>
     <div class="note ${stock<=0?'warn':''}">
       ${sure?'實際庫存':'<b style="color:var(--warn)">帳面</b>庫存'}　<b>${stock} / 七日儲備 ${j.drug.q} ${j.drug.u}</b>${j.drug.note?'　·　'+j.drug.note:''}
       ${sure?'':'<br><span style="color:var(--ink-faint)">第四天了，這個數字還沒有人核對過。架上不一定有這麼多。</span>'}

@@ -8,44 +8,168 @@ const player = {pos:[BENCH[0],BENCH[1]+2.5], yaw:Math.PI, keys:{}, wide:false};
 const ROLECOL = {doc:0xe6ece9, nurse:0xa9d3de, rad:0x9fb0dd, lab:0xc3a2dd, psy:0x93d9ae, vol:0x8ba0a0, admin:0xbdb6a4, out:0xd9a06b};
 const ROLEKEY = {'醫師':'doc','護理師':'nurse','放射師':'rad','醫檢師':'lab','心理諮商／社工師':'psy','站長':'admin','外部':'out'};
 
+/* ---------- 共用資源 ----------
+   原本每個 box() 都新建一份幾何與材質：六百多個網格、四百多份材質。
+   顏色與質感相同的東西共用同一份，之後才能把靜態物件合併成少數幾次 draw call。
+   會在執行中改顏色的（窗口前的人、調劑檯面、鎖頭）另外拿自己的一份。 */
+const GC={}, MC={};
+const geo=(k,make)=>GC[k]||(GC[k]=make());
+function stdMat(c,r,m,e,ei){
+  const k=`${c}|${r}|${m||0}|${e||0}|${ei==null?1:ei}`;
+  return MC[k]||(MC[k]=new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m||0,
+    emissive:e||0,emissiveIntensity:ei==null?1:ei}));
+}
+function basicMat(c,op,o){
+  o=o||{};
+  const k=`b${c}|${op}|${o.add?1:0}|${o.dw===false?0:1}|${o.ds?1:0}`;
+  return MC[k]||(MC[k]=new THREE.MeshBasicMaterial({color:c,transparent:op<1,opacity:op,
+    depthWrite:o.dw!==false, side:o.ds?THREE.DoubleSide:THREE.FrontSide,
+    blending:o.add?THREE.AdditiveBlending:THREE.NormalBlending}));
+}
+/* 畫在 canvas 上的字：開場時網頁字型多半還沒下載完，先畫的會是系統字型。
+   每一張都記下怎麼畫，字型到了再重畫一次。貼圖開 mipmap，拉遠時字不會閃爍。 */
+const TEXDRAW=[];
+function canvasTex(w,h,draw){
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d'); draw(g);
+  const t=new THREE.CanvasTexture(c);
+  if (renderer) t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+  TEXDRAW.push(()=>{ g.clearRect(0,0,w,h); draw(g); t.needsUpdate=true; });
+  return t;
+}
+function redrawTextOnFonts(){
+  if (!document.fonts || !document.fonts.load) return;
+  Promise.all(['700 46px "Noto Sans TC"','400 25px "Noto Sans TC"','400 25px "JetBrains Mono"',
+    '700 60px "JetBrains Mono"'].map(f=>document.fonts.load(f,'藥局 B2').catch(()=>null)))
+    .then(()=>document.fonts.ready)
+    .then(()=>{ TEXDRAW.forEach(f=>f()); if (M.fctx) drawFridge(); })
+    .catch(()=>{});
+}
 function labelSprite(text, sub, w){
-  const c=document.createElement('canvas'); c.width=512; c.height=128;
-  const g=c.getContext('2d');
-  g.fillStyle='#cfd6d2'; g.font='700 46px "Noto Sans TC",sans-serif';
-  g.textAlign='center'; g.textBaseline='middle'; g.fillText(text,256,46);
-  if (sub){ g.fillStyle='#6c7a76'; g.font='400 25px "JetBrains Mono",monospace'; g.fillText(sub,256,90); }
-  const tex=new THREE.CanvasTexture(c); tex.minFilter=THREE.LinearFilter;
+  const tex=canvasTex(512,128,g=>{
+    g.fillStyle='#cfd6d2'; g.font='700 46px "Noto Sans TC",sans-serif';
+    g.textAlign='center'; g.textBaseline='middle'; g.fillText(text,256,46);
+    if (sub){ g.fillStyle='#6c7a76'; g.font='400 25px "JetBrains Mono",monospace'; g.fillText(sub,256,90); }
+  });
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,opacity:.6}));
   sp.scale.set(w||4,(w||4)/4,1); return sp;
 }
+const TT={};
 function textTex(txt,bg,fg){
-  const c=document.createElement('canvas'); c.width=256; c.height=64;
-  const g=c.getContext('2d'); g.fillStyle=bg; g.fillRect(0,0,256,64);
-  g.strokeStyle=fg; g.lineWidth=3; g.strokeRect(2,2,252,60);
-  g.fillStyle=fg; g.font='700 30px "Noto Sans TC",sans-serif';
-  g.textAlign='center'; g.textBaseline='middle'; g.fillText(txt,128,34);
-  const t=new THREE.CanvasTexture(c); t.minFilter=THREE.LinearFilter; return t;
+  const k=txt+'|'+bg+'|'+fg;                   // 同一塊牌子（「領　藥」）只畫一次
+  return TT[k]||(TT[k]=canvasTex(256,64,g=>{
+    g.fillStyle=bg; g.fillRect(0,0,256,64);
+    g.strokeStyle=fg; g.lineWidth=3; g.strokeRect(2,2,252,60);
+    g.fillStyle=fg; g.font='700 30px "Noto Sans TC",sans-serif';
+    g.textAlign='center'; g.textBaseline='middle'; g.fillText(txt,128,34);
+  }));
 }
 function box(w,h,d,color,o){
   o=o||{};
-  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({
-    color, roughness:o.rough!=null?o.rough:.85, metalness:o.metal||0,
-    emissive:o.emissive||0x000000, emissiveIntensity:o.ei||1}));
+  const r=o.rough!=null?o.rough:.85;
+  const mat = o.own
+    ? new THREE.MeshStandardMaterial({color,roughness:r,metalness:o.metal||0,
+        emissive:o.emissive||0,emissiveIntensity:o.ei||1})
+    : stdMat(color,r,o.metal||0,o.emissive||0,o.ei||1);
+  const m=new THREE.Mesh(geo(`B${w}|${h}|${d}`,()=>new THREE.BoxGeometry(w,h,d)), mat);
   m.castShadow=true; m.receiveShadow=true; return m;
 }
+/* 腳底下一圈軟影子。主燈的陰影貼圖解析度只夠讓人「有影子」，
+   站在地上的感覺要靠這一圈：一張共用貼圖、一個平面，幾乎不花成本。 */
+let BLOB=null;
+function blobMat(){
+  if (BLOB) return BLOB;
+  const c=document.createElement('canvas'); c.width=c.height=64;
+  const g=c.getContext('2d'), gr=g.createRadialGradient(32,32,2,32,32,31);
+  gr.addColorStop(0,'rgba(0,0,0,.85)'); gr.addColorStop(.55,'rgba(0,0,0,.4)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=gr; g.fillRect(0,0,64,64);
+  return BLOB=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,
+    opacity:.55,depthWrite:false});
+}
+/* 水泥地的細紋：一張程序產生的灰階雜訊，乘在原本的地色上。 */
+function concreteTex(){
+  const N=256, c=document.createElement('canvas'); c.width=c.height=N;
+  const g=c.getContext('2d'), im=g.createImageData(N,N), d=im.data;
+  const rr=mulberry(0x5eed);
+  // 兩層：大塊的不均勻＋細顆粒，平鋪時不能看出接縫，所以大塊那層用可平鋪的值雜訊
+  const G=8, grid=[]; for (let i=0;i<G*G;i++) grid.push(rr());
+  const at=(x,y)=>grid[((y%G+G)%G)*G+((x%G+G)%G)];
+  const sm=t=>t*t*(3-2*t);
+  for (let y=0;y<N;y++) for (let x=0;x<N;x++){
+    const fx=x/N*G, fy=y/N*G, x0=Math.floor(fx), y0=Math.floor(fy), tx=sm(fx-x0), ty=sm(fy-y0);
+    const a=at(x0,y0)+(at(x0+1,y0)-at(x0,y0))*tx, b=at(x0,y0+1)+(at(x0+1,y0+1)-at(x0,y0+1))*tx;
+    const v=.80+(a+(b-a)*ty)*.14+(rr()-.5)*.10;
+    const k=(y*N+x)*4, q=Math.max(0,Math.min(255,v*255));
+    d[k]=d[k+1]=d[k+2]=q; d[k+3]=255;
+  }
+  g.putImageData(im,0,0);
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+function mulberry(a){ return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+/** 把平面的 UV 依實際尺寸放大，所有地面共用一張貼圖時紋理密度一致 */
+function worldUV(g,w,h,scale){
+  const uv=g.attributes.uv; for (let i=0;i<uv.count;i++) uv.setXY(i,uv.getX(i)*w/scale,uv.getY(i)*h/scale);
+  uv.needsUpdate=true; return g;
+}
+/** 把一組網格烘成一份幾何：頂點套上 mtx(m)，顏色寫進頂點色。
+    顏色取材質原色；glow 時加上自發光的一部分（人身上的臂章、識別條沒有自己的材質了，
+    不加會暗掉）。已有頂點色的照抄。 */
+const _bv=new THREE.Vector3(), _bn=new THREE.Matrix3(), _bc=new THREE.Color();
+function bakeGeo(list, mtx, glow){
+  let nv=0, ni=0, hasUV=true;
+  list.forEach(m=>{ const g=m.geometry, n=g.attributes.position.count;
+    nv+=n; ni+=g.index?g.index.count:n; if (!g.attributes.uv) hasUV=false; });
+  const pos=new Float32Array(nv*3), nor=new Float32Array(nv*3), col=new Float32Array(nv*3);
+  const uv=hasUV?new Float32Array(nv*2):null, idx=new (nv>65535?Uint32Array:Uint16Array)(ni);
+  let vo=0, io=0;
+  list.forEach(m=>{
+    const g=m.geometry, P=g.attributes.position, N=g.attributes.normal, U=g.attributes.uv, C=g.attributes.color;
+    const M4=mtx(m); _bn.getNormalMatrix(M4);
+    const mt=m.material;
+    if (!C){ _bc.copy(mt.color);
+      if (glow && mt.emissive && mt.emissive.getHex()) _bc.r+=mt.emissive.r*mt.emissiveIntensity*.6,
+        _bc.g+=mt.emissive.g*mt.emissiveIntensity*.6, _bc.b+=mt.emissive.b*mt.emissiveIntensity*.6; }
+    for (let i=0;i<P.count;i++){
+      const o=(vo+i)*3;
+      _bv.fromBufferAttribute(P,i).applyMatrix4(M4); _bv.toArray(pos,o);
+      if (N) _bv.fromBufferAttribute(N,i).applyMatrix3(_bn).normalize(); else _bv.set(0,1,0);
+      _bv.toArray(nor,o);
+      if (C){ col[o]=C.getX(i); col[o+1]=C.getY(i); col[o+2]=C.getZ(i); }
+      else { col[o]=_bc.r; col[o+1]=_bc.g; col[o+2]=_bc.b; }
+      if (uv){ uv[(vo+i)*2]=U.getX(i); uv[(vo+i)*2+1]=U.getY(i); }
+    }
+    if (g.index) for (let i=0;i<g.index.count;i++) idx[io++]=g.index.getX(i)+vo;
+    else for (let i=0;i<P.count;i++) idx[io++]=vo+i;
+    vo+=P.count;
+  });
+  const bg=new THREE.BufferGeometry();
+  bg.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  bg.setAttribute('normal',new THREE.BufferAttribute(nor,3));
+  bg.setAttribute('color',new THREE.BufferAttribute(col,3));
+  if (uv) bg.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+  bg.setIndex(new THREE.BufferAttribute(idx,1));
+  bg.computeBoundingSphere();
+  return bg;
+}
 /* ---------- 人 ----------
-   原本每個人是一根圓柱加一顆球。現在是有肩膀、手臂、腿與頭的身形，
-   而且可以戴上裝備：背心、頭盔、帽子、識別臂章。
-   幾何與材質共用一份，所以人再多也只是多幾個 draw call。 */
-const PG = {};   // 共用幾何
-function pgeo(k, make){ return PG[k] || (PG[k]=make()); }
+   有肩膀、手臂、腿與頭的身形，可以戴上裝備：背心、頭盔、帽子、識別臂章。
+   幾何與材質都共用；站著的人腿與手臂的轉軸設在髖與肩，走路時會擺動
+   （userData.limbs，由 gait() 驅動）。窗口前會換顏色的人傳 kit.own，身體材質另外拿一份。 */
+let PMAT=null;
+const personMat=()=>PMAT||(PMAT=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.7}));
+const PG = GC;
+const pgeo = geo;
 const SKIN=[0xd8c6ab,0xcdb694,0xe0cdb4,0xc2a888];
 function person(col, lying, kit){
   kit = kit||{};
   const g=new THREE.Group();
-  const mat=(c,r,m)=>new THREE.MeshStandardMaterial({color:c,roughness:r==null?.68:r,metalness:m||0});
-  const leg=pgeo('leg',()=>new THREE.CylinderGeometry(.082,.072,.82,7));
+  const leg=pgeo('legp',()=>new THREE.CylinderGeometry(.082,.072,.82,7).translate(0,-.41,0));
   const arm=pgeo('arm',()=>new THREE.CylinderGeometry(.062,.055,.58,7));
+  const armp=pgeo('armp',()=>new THREE.CylinderGeometry(.062,.055,.58,7).translate(0,-.29,0));
   const tor=pgeo('tor',()=>new THREE.CylinderGeometry(.225,.28,.66,10));
   const shl=pgeo('shl',()=>new THREE.CylinderGeometry(.285,.26,.16,10));
   const hed=pgeo('hed',()=>new THREE.SphereGeometry(.152,12,10));
@@ -56,7 +180,8 @@ function person(col, lying, kit){
   const inner=new THREE.Group(); g.add(inner);
   const put=(geo,m,x,y,z,rz)=>{ const o=new THREE.Mesh(geo,m);
     o.position.set(x,y,z); if(rz) o.rotation.z=rz; o.castShadow=true; inner.add(o); return o; };
-  const mBody=mat(col,.62), mLeg=mat(trouser,.78), mSkin=mat(skin,.72);
+  const mBody = kit.own ? new THREE.MeshStandardMaterial({color:col,roughness:.62}) : stdMat(col,.62);
+  const mLeg=stdMat(trouser,.78), mSkin=stdMat(skin,.72);
   let torso;
   if (kit.sit){
     /* 坐著：大腿往前、小腿往下，身體整個降到椅面上。
@@ -76,43 +201,67 @@ function person(col, lying, kit){
     put(hed,mSkin,0,1.35,0);
     g.userData.seated=true;
   } else {
-    put(leg,mLeg,-.105,.41,0); put(leg,mLeg,.105,.41,0);
+    const l1=put(leg,mLeg,-.105,.82,0), l2=put(leg,mLeg,.105,.82,0);
     torso=put(tor,mBody,0,1.14,0);
     put(shl,mBody,0,1.45,0);
-    put(arm,mBody,-.285,1.16,0,.13); put(arm,mBody,.285,1.16,0,-.13);
+    const a1=put(armp,mBody,-.285,1.45,0,.13), a2=put(armp,mBody,.285,1.45,0,-.13);
     put(nck,mSkin,0,1.56,0);
     put(hed,mSkin,0,1.70,0);
+    if (!lying) g.userData.limbs={l1,l2,a1,a2,ph:Math.random()*6,amt:0};
   }
   g.userData.body=torso;                       // 需要換色的時候換這一塊
   const dy = kit.sit ? -.355 : 0;               // 坐著的時候所有裝備一起降
   if (kit.vest!=null){                         // 戰術／反光背心
-    const v=put(pgeo('vest',()=>new THREE.BoxGeometry(.5,.44,.34)), mat(kit.vest,.72), 0,1.18+dy,0);
-    v.scale.set(1,1,1);
-    if (kit.band!=null){                       // 背心上的識別條
-      put(pgeo('band',()=>new THREE.BoxGeometry(.52,.075,.36)),
-        new THREE.MeshStandardMaterial({color:kit.band,roughness:.5,
-          emissive:kit.band,emissiveIntensity:.45}), 0,1.30+dy,0);
-    }
+    put(pgeo('vest',()=>new THREE.BoxGeometry(.5,.44,.34)), stdMat(kit.vest,.72), 0,1.18+dy,0);
+    if (kit.band!=null)                        // 背心上的識別條
+      put(pgeo('band',()=>new THREE.BoxGeometry(.52,.075,.36)), stdMat(kit.band,.5,0,kit.band,.45), 0,1.30+dy,0);
   }
   if (kit.helmet!=null){                       // 頭盔（半球＋帽簷）
     put(pgeo('hel',()=>new THREE.SphereGeometry(.176,12,8,0,Math.PI*2,0,Math.PI*0.56)),
-      mat(kit.helmet,.62,.08), 0,1.705+dy,0);
+      stdMat(kit.helmet,.62,.08), 0,1.705+dy,0);
     put(pgeo('brim',()=>new THREE.CylinderGeometry(.185,.185,.028,12)),
-      mat(kit.helmet,.62,.08), 0,1.645+dy,0);
+      stdMat(kit.helmet,.62,.08), 0,1.645+dy,0);
   } else if (kit.cap!=null){                    // 鴨舌帽
-    put(pgeo('capc',()=>new THREE.CylinderGeometry(.155,.15,.1,10)), mat(kit.cap,.72), 0,1.79+dy,0);
-    put(pgeo('capb',()=>new THREE.BoxGeometry(.26,.022,.16)), mat(kit.cap,.72), 0,1.755+dy,-.16);
+    put(pgeo('capc',()=>new THREE.CylinderGeometry(.155,.15,.1,10)), stdMat(kit.cap,.72), 0,1.79+dy,0);
+    put(pgeo('capb',()=>new THREE.BoxGeometry(.26,.022,.16)), stdMat(kit.cap,.72), 0,1.755+dy,-.16);
   }
   if (kit.pack){                                // 背包／醫療包
-    put(pgeo('pack',()=>new THREE.BoxGeometry(.34,.4,.2)), mat(kit.pack,.8), 0,1.2+dy,.24);
+    put(pgeo('pack',()=>new THREE.BoxGeometry(.34,.4,.2)), stdMat(kit.pack,.8), 0,1.2+dy,.24);
   }
   if (kit.badge!=null){                         // 臂章
-    put(pgeo('badge',()=>new THREE.BoxGeometry(.09,.09,.03)),
-      new THREE.MeshStandardMaterial({color:kit.badge,roughness:.5,
-        emissive:kit.badge,emissiveIntensity:.5}), -.31,1.30+dy,0);
+    put(pgeo('badge',()=>new THREE.BoxGeometry(.09,.09,.03)), stdMat(kit.badge,.5,0,kit.badge,.5), -.31,1.30+dy,0);
+  }
+  /* 不會擺動、不會換色的部位（軀幹、頭、頸、裝備……）烘成一個網格：
+     一個人從十幾次 draw call 變成五次（身體＋兩腿＋兩臂），陰影貼圖也一樣省。 */
+  {
+    const L=g.userData.limbs, sep=new Set(L?[L.l1,L.l2,L.a1,L.a2]:[]);
+    if (kit.own) inner.children.forEach(o=>{ if (o.material===mBody) sep.add(o); });
+    const rig=inner.children.filter(o=>!sep.has(o));
+    rig.forEach(o=>o.updateMatrix());
+    const rm=new THREE.Mesh(bakeGeo(rig,o=>o.matrix,true), personMat());
+    rm.castShadow=true; rig.forEach(o=>inner.remove(o)); inner.add(rm);
   }
   if (lying){ inner.rotation.z=Math.PI/2; inner.position.set(1.0,.18,0); }
+  else {                                        // 腳下的軟影子
+    const b=new THREE.Mesh(pgeo('blob',()=>new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2)), blobMat());
+    b.scale.set(kit.sit?.95:.8,1,kit.sit?1.05:.8); b.position.set(0,.034,kit.sit?.12:0); b.renderOrder=1;
+    g.add(b);
+  }
   return g;
+}
+/** 走路的擺動：看這一幀實際移動了多少，就擺多少。不用另外記誰在走。 */
+function gait(g, dt){
+  const L=g.userData.limbs; if (!L || !dt) return;
+  const p=g.position, lp=L.lp||(L.lp=[p.x,p.z]);
+  const v=Math.hypot(p.x-lp[0], p.z-lp[1])/dt; lp[0]=p.x; lp[1]=p.z;
+  const want=Math.min(1,v/1.4);
+  L.amt += (want-L.amt)*Math.min(1,dt*8);
+  if (L.amt<.01 && !L.moved) return;
+  L.moved = L.amt>=.01;
+  L.ph += dt*Math.min(v,5)*4.2;
+  const s=Math.sin(L.ph)*.55*L.amt;
+  L.l1.rotation.x=s; L.l2.rotation.x=-s;
+  L.a1.rotation.x=-s*.8; L.a2.rotation.x=s*.8;
 }
 /* ---------- 場景陳設 ----------
    這裡本來是社區大樓的地下二樓停車場。停車格線、柱號、消防栓、通風管、
@@ -123,12 +272,12 @@ function person(col, lying, kit){
 function dressStation(small){
   const add=(o,x,y,z,ry)=>{ o.position.set(x,y,z); if(ry) o.rotation.y=ry;
     o.receiveShadow=true; scene.add(o); return o; };
-  const flat=(w,d,c,op)=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
-    new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:op==null?.5:op,depthWrite:false}));
+  const flat=(w,d,c,op)=>{ const m=new THREE.Mesh(geo(`P${w}|${d}`,()=>new THREE.PlaneGeometry(w,d)),
+    basicMat(c,op==null?.5:op,{dw:false}));
     m.rotation.x=-Math.PI/2; return m; };
-  const cyl=(r,h,c,seg,rough,metal)=>new THREE.Mesh(
-    new THREE.CylinderGeometry(r,r,h,seg||10),
-    new THREE.MeshStandardMaterial({color:c,roughness:rough==null?.7:rough,metalness:metal||0}));
+  const cyl=(r,h,c,seg,rough,metal)=>{ const m=new THREE.Mesh(
+    geo(`C${r}|${h}|${seg||10}`,()=>new THREE.CylinderGeometry(r,r,h,seg||10)),
+    stdMat(c,rough==null?.7:rough,metal||0)); return m; };
 
   /* ── 停車場留下來的 ───────────────────────── */
   // 停車格線：公共空間、留觀、遺體、廢棄物那幾區的線還在地上
@@ -185,8 +334,7 @@ function dressStation(small){
     const d=cyl(.17,15,0x2b3336,9,.75,.3); d.rotation.x=Math.PI/2; add(d, x,3.2,z); });
   // 地上的舊油漬
   if (!small) [[-11.0,4.4,1.5],[8.6,3.2,1.1],[-1.2,5.0,.9],[10.4,-6.0,1.3]].forEach(([x,z,r])=>{
-    const o=new THREE.Mesh(new THREE.CircleGeometry(r,14),
-      new THREE.MeshBasicMaterial({color:0x080b0c,transparent:true,opacity:.45,depthWrite:false}));
+    const o=new THREE.Mesh(geo('oil'+r,()=>new THREE.CircleGeometry(r,14)), basicMat(0x080b0c,.45,{dw:false}));
     o.rotation.x=-Math.PI/2; add(o, x,.018,z); });
   // 車道口的「急救站」布條與出口箭頭
   {
@@ -237,9 +385,10 @@ function dressStation(small){
     .forEach(([x,z,w,d])=>add(flat(w||.1,d||.1,0xd9a44e,.34), x,.025,z));
   // 帆布隔間與布簾（診療區的隱私）
   const tarp=(x,z,w,ry,c,op,hh)=>{ const h=hh||1.7;
-    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
-      new THREE.MeshStandardMaterial({color:c,roughness:.95,transparent:true,
-        opacity:op==null?.5:op,side:THREE.DoubleSide})); add(m,x,h/2+.05,z,ry); };
+    const k=`tarp${c}|${op}`;
+    const m=new THREE.Mesh(geo(`P${w}|${h}`,()=>new THREE.PlaneGeometry(w,h)),
+      MC[k]||(MC[k]=new THREE.MeshStandardMaterial({color:c,roughness:.95,transparent:true,
+        opacity:op==null?.5:op,side:THREE.DoubleSide,depthWrite:false}))); add(m,x,h/2+.05,z,ry); };
   tarp(-5.0,0.98,5.6,0,0x4d5a5e,.5);                // 診療區一的隱私隔間
   tarp(-5.0,5.9,5.6,0,0x4d5a5e,.5);                 // 診療區二
   tarp(10.8,-6.5,4.6,Math.PI/2,0x1a1e20,.8,2.0);    // 遺體區的黑色屏風
@@ -308,49 +457,54 @@ function init3D(){
   renderer=new THREE.WebGLRenderer({canvas,antialias:!small,powerPreference:'high-performance'});
   // 畫質預算：地下室場景不需要 2x 像素比，陰影也只留一盞主燈與工作燈。
   // 手機一開始就給比較低的像素比與較軟的陰影，寧可從頭就順，不要跑三秒才降級。
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, small?1.25:1.6));
+  M.basePR=Math.min(window.devicePixelRatio||1, small?1.25:1.6);
+  renderer.setPixelRatio(M.basePR);
   renderer.shadowMap.enabled=true;
   renderer.shadowMap.type= small?THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+  // 陰影貼圖不必每幀重畫：場景幾乎全是靜態的，由 render3D 依畫質等級決定多久更新一次
+  renderer.shadowMap.autoUpdate=false; renderer.shadowMap.needsUpdate=true;
   if (renderer.outputEncoding!==undefined) renderer.outputEncoding=THREE.sRGBEncoding;
   if (THREE.ACESFilmicToneMapping!==undefined){
-    renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.22; }
+    renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.12; }
   scene=new THREE.Scene();
   scene.background=new THREE.Color(0x06080a);
   scene.fog=new THREE.FogExp2(0x06080a,0.030);
   cam=new THREE.PerspectiveCamera(46,1,0.1,200);
 
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(64,54),
-    new THREE.MeshStandardMaterial({color:0x0e1214,roughness:.78,metalness:.08}));
+  // 地面：所有地坪共用一張水泥紋理，UV 依實際尺寸放大，紋理密度一致
+  const conc=concreteTex();
+  const floor=new THREE.Mesh(worldUV(new THREE.PlaneGeometry(64,54),64,54,4),
+    new THREE.MeshStandardMaterial({color:0x0e1214,roughness:.78,metalness:.08,map:conc}));
   floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
 
+  const outl={pharm:[],other:[]};
   ZONES.forEach(z=>{
     const w=z.b[0]-z.a[0], h=z.b[1]-z.a[1];
-    const m=new THREE.Mesh(new THREE.PlaneGeometry(w-.3,h-.3),
-      new THREE.MeshStandardMaterial({color:z.c,roughness:.9}));
+    const k='zone'+z.c;
+    const m=new THREE.Mesh(worldUV(new THREE.PlaneGeometry(w-.3,h-.3),w-.3,h-.3,4),
+      MC[k]||(MC[k]=new THREE.MeshStandardMaterial({color:z.c,roughness:.9,map:conc})));
     m.rotation.x=-Math.PI/2; m.position.set(z.a[0]+w/2,.012,z.a[1]+h/2);
     m.receiveShadow=true; scene.add(m); M.zones.push(m);
-    const pts=[], x0=z.a[0]+.15,x1=z.b[0]-.15,z0=z.a[1]+.15,z1=z.b[1]-.15;
-    [[x0,z0],[x1,z0],[x1,z1],[x0,z1],[x0,z0]].forEach(p=>pts.push(new THREE.Vector3(p[0],.03,p[1])));
-    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
-      new THREE.LineBasicMaterial({color:z.id==='pharm'?0x6b5222:0x2f3b40})));
+    const x0=z.a[0]+.15,x1=z.b[0]-.15,z0=z.a[1]+.15,z1=z.b[1]-.15;
+    const P=[[x0,z0],[x1,z0],[x1,z1],[x0,z1]], L=outl[z.id==='pharm'?'pharm':'other'];
+    P.forEach((p,i)=>{ const q=P[(i+1)%4]; L.push(new THREE.Vector3(p[0],.03,p[1]),new THREE.Vector3(q[0],.03,q[1])); });
     const sp=labelSprite(z.name,z.k,Math.min(w*.72,4.3));
     sp.position.set(z.a[0]+w/2,2.95,z.a[1]+h/2); scene.add(sp); M.labels.push(sp);
   });
-  const wall=(x,z,w,d,h,c)=>{const m=box(w,h,d,c||0x161d20,{rough:1}); m.position.set(x,h/2,z); scene.add(m);};
+  // 十二區的外框：兩次 draw call 畫完，不是十二次
+  [['pharm',0x6b5222],['other',0x2f3b40]].forEach(([k,c])=>scene.add(new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(outl[k]), new THREE.LineBasicMaterial({color:c}))));
+  /* 會擋住鏡頭的東西（柱子、外牆、架子背板）：各自一份材質，擋到你的時候變淡。 */
+  M.occ=[];
+  const occ=m=>{ m.material.transparent=false; m.userData.fade=1; M.occ.push(m); return m; };
+  const wall=(x,z,w,d,h,c)=>{const m=occ(box(w,h,d,c||0x161d20,{rough:1,own:true})); m.position.set(x,h/2,z); scene.add(m);};
   wall(0,-9.7,27,.5,3.4); wall(0,6.7,27,.5,3.4);
   wall(-13.5,-1.5,.5,17,3.4); wall(13.5,-1.5,.5,17,3.4);
-  const lint=box(8,.7,.6,0x1e262a); lint.position.set(5,3.05,-9.7); scene.add(lint);
+  const lint=occ(box(8,.7,.6,0x1e262a,{own:true})); lint.position.set(5,3.05,-9.7); scene.add(lint);
   const ramp=box(8,.3,6,0x11161a,{rough:1}); ramp.position.set(5,-.1,-12.4); ramp.rotation.x=-.09; scene.add(ramp);
-  // 十根柱子：同樣合併成一次 draw call
-  {
-    const P=[[-9.5,-1.5],[-9.5,3.5],[-4.5,-1.5],[-4.5,3.5],[1,-1.5],[1,3.5],[7,-1.5],[7,3.5],[11.4,-1.5],[11.4,3.5]];
-    const im=new THREE.InstancedMesh(new THREE.BoxGeometry(.8,3.4,.8),
-      new THREE.MeshStandardMaterial({color:0x1c2427,roughness:.92}), P.length);
-    im.castShadow=true; im.receiveShadow=true;
-    const m=new THREE.Matrix4();
-    P.forEach(([x,z],i)=>{ m.makeTranslation(x,1.7,z); im.setMatrixAt(i,m); });
-    im.instanceMatrix.needsUpdate=true; scene.add(im);
-  }
+  // 十根柱子：鏡頭在人後面，柱子常常剛好擋在中間——每根各自能變淡
+  [[-9.5,-1.5],[-9.5,3.5],[-4.5,-1.5],[-4.5,3.5],[1,-1.5],[1,3.5],[7,-1.5],[7,3.5],[11.4,-1.5],[11.4,3.5]]
+    .forEach(([x,z])=>{ const m=occ(box(.8,3.4,.8,0x1c2427,{rough:.92,own:true})); m.position.set(x,1.7,z); scene.add(m); });
 
   // 藥局
   const bench=box(4.4,.9,1.5,0x3a3226,{rough:.55,metal:.15});
@@ -393,7 +547,7 @@ function init3D(){
     im.instanceMatrix.needsUpdate=true; if (im.instanceColor) im.instanceColor.needsUpdate=true;
     scene.add(im);
   }
-  const sb=box(4.9,2.5,.14,0x1a2124); sb.position.set(BENCH[0]-.2,1.25,BENCH[1]-2.16); scene.add(sb);
+  const sb=occ(box(4.9,2.5,.14,0x1a2124,{own:true})); sb.position.set(BENCH[0]-.2,1.25,BENCH[1]-2.16); scene.add(sb);
   const cab=box(1.0,1.7,.6,0x2a2226,{rough:.65,metal:.2});
   cab.position.set(BENCH[0]+2.6,.85,BENCH[1]-1.9); scene.add(cab);
   const lock=new THREE.Mesh(new THREE.SphereGeometry(.07,10,8),
@@ -505,7 +659,7 @@ function init3D(){
     M.npcs.push({g,name,role:r,pos:[...p],tgt:[...p],wait:fxRnd(0,20),cool:fxRnd(0,40)});
   });
   // 諮詢者：需要時才出現在領藥窗口
-  M.consult=person(0xd9a06b); M.consult.position.set(WINDOW[0]+.4,0,WINDOW[1]);
+  M.consult=person(0xd9a06b,false,{own:true}); M.consult.position.set(WINDOW[0]+.4,0,WINDOW[1]);
   M.consult.visible=false; scene.add(M.consult);
   // 維安：每一種先做一個，藏起來。有人經過的時候才出現
   M.sec = SECURITY.map(sp=>{
@@ -522,7 +676,10 @@ function init3D(){
   dressStation(small);
 
   // 燈光
-  scene.add(new THREE.AmbientLight(0x384b50,.58));
+  /* 原本是一盞平的環境光（0.58），所有東西四面一樣亮，人看起來是剪紙。
+     改成上冷下暗的半球光：頭肩亮、腳邊暗，形體出得來，整體亮度差不多。 */
+  scene.add(new THREE.AmbientLight(0x384b50,.16));
+  scene.add(new THREE.HemisphereLight(0x5f7c86,0x14110d,.50));
   const rim=new THREE.DirectionalLight(0x5f7f88,.22); rim.position.set(-10,6,10); scene.add(rim);
   const key=new THREE.DirectionalLight(0x93a8ad,.30); key.position.set(6,18,2);
   key.castShadow=true; key.shadow.mapSize.set(small?512:768,small?512:768); key.shadow.bias=-0.0006;
@@ -589,8 +746,10 @@ function init3D(){
   });
   [[-10.5,-6.4,.5],[0,-6.6,.5],[5.5,-6.6,.42],[-5,3,.42],[2,2,.46],[9.5,1,.46],
    [1.5,4.6,.34],[10.5,4.0,.32],[-11,3.2,.3]].forEach(([x,z,i])=>{
-    const l=new THREE.PointLight(0x8fb0b8,i,15,2); l.position.set(x,3.0,z);
-    l.userData.base=i; scene.add(l); M.lights.push(l);
+    /* 照明範圍從 15 公尺收到 9.5：原本每一處地面同時被四五盞燈照到，整片一樣亮、
+       人的頭肩被打成白色。收短之後燈下亮、燈與燈之間暗，地下室該有的樣子。 */
+    const l=new THREE.PointLight(0x8fb0b8,i*1.45,9.5,1.7); l.position.set(x,3.0,z);
+    l.userData.base=i*1.45; scene.add(l); M.lights.push(l);
   });
   // 粉塵
   const dg=new THREE.BufferGeometry(); const N=260, a=new Float32Array(N*3);
@@ -605,11 +764,15 @@ function init3D(){
   debrisPts=new THREE.Points(bg,new THREE.PointsMaterial({color:0xb0a08a,size:.09,transparent:true,opacity:0}));
   scene.add(debrisPts);
   // 玩家（藥師，白袍）
-  M.player=person(0xe8e2d2);
+  M.player=person(0xe0dacb);
   const ring=new THREE.Mesh(new THREE.RingGeometry(.5,.6,26),
     new THREE.MeshBasicMaterial({color:0xd99a3c,side:THREE.DoubleSide,transparent:true,opacity:.6}));
   ring.rotation.x=-Math.PI/2; ring.position.y=.05; M.player.add(ring);
   scene.add(M.player);
+  // 碎屑每次打擊都從原本的高度落下
+  M.debrisY=Float32Array.from({length:B},(_,i)=>ba[i*3+1]);
+  optimizeStatic();
+  redrawTextOnFonts();
   onResize();
   // 視窗或宿主容器變動時重算斷點；斷點一變版面就換，3D 也要重新量一次
   const relayout=()=>{ const changed=layoutClass(); onResize(); if (changed) dirty.detail=dirty.q=true; };
@@ -617,6 +780,96 @@ function init3D(){
   window.addEventListener('orientationchange',()=>setTimeout(relayout,180));
   [120,400,1200].forEach(ms=>setTimeout(relayout,ms));   // 宿主容器晚一點才定尺寸也接得住
   if (window.ResizeObserver) new ResizeObserver(relayout).observe(document.documentElement);
+}
+/* ---------- 靜態合併 ----------
+   場景搭好之後，不會動、不會換色、不會藏起來的網格，依材質（與是否投影）
+   合併成一個網格。原本主畫面加兩張陰影貼圖每幀要 500 多次 draw call，
+   合併後剩下一小部分。會動的、會改的東西列在 keep 裡，原封不動。
+   不動的物件同時關掉 matrixAutoUpdate，每幀不再重算六百多個矩陣。 */
+function optimizeStatic(){
+  const keep=new Set(), dyn=new Set();
+  const K=o=>{ if (o && o.isObject3D) keep.add(o); };
+  [M.player,M.consult,M.bench,M.lock,M.genLed,M.pool,M.cone,M.work,M.winLight,M.fglow,dust,debrisPts]
+    .forEach(K);
+  [M.baskets,M.labels,M.occ,M.sec,M.lights].forEach(a=>(a||[]).forEach(K));
+  M.npcs.forEach(n=>K(n.g));
+  [M.player,M.consult,dust,...M.sec,...M.npcs.map(n=>n.g)].forEach(o=>dyn.add(o));
+  scene.updateMatrixWorld(true);
+  /* 分組：沒有貼圖的實心材質不看顏色、只看質感（粗糙度與金屬度取到 0.05），
+     顏色烘進頂點色，十幾種深灰色的箱子、桌腳、椅子就能併成同一個網格。
+     有貼圖或半透明的，照材質本身分組。 */
+  const q=x=>Math.round(x*20)/20;
+  const sig=c=>{
+    const m=c.material, sh='|'+(+c.castShadow)+(+c.receiveShadow)+'|'+c.renderOrder+'|'+m.side;
+    if (!m.map && !m.transparent && (m.isMeshStandardMaterial||m.isMeshBasicMaterial))
+      return (m.isMeshBasicMaterial?'B':`S${q(m.roughness)}|${q(m.metalness)}|${m.isBaked?0:m.emissive.getHex()}|${m.isBaked?0:m.emissiveIntensity}`)+sh;
+    return m.uuid+sh;
+  };
+  const groups=new Map();
+  (function walk(o){
+    for (const c of o.children){
+      if (keep.has(c)) continue;
+      if (c.isMesh && !c.isInstancedMesh && c.visible && !c.children.length &&
+          !Array.isArray(c.material) && c.geometry && c.geometry.attributes.position){
+        const k=sig(c);
+        if (!groups.has(k)) groups.set(k,[]);
+        groups.get(k).push(c);
+      }
+      walk(c);
+    }
+  })(scene);
+  let merged=0;
+  groups.forEach((list,k)=>{
+    if (list.length<2) return;
+    const m0=list[0].material, vc=!m0.map && !m0.transparent;
+    let mat=m0;
+    if (vc){
+      mat = m0.isMeshBasicMaterial ? new THREE.MeshBasicMaterial({vertexColors:true, side:m0.side})
+        : new THREE.MeshStandardMaterial({vertexColors:true, side:m0.side,
+            roughness:q(m0.roughness), metalness:q(m0.metalness),
+            emissive:m0.isBaked?0:m0.emissive, emissiveIntensity:m0.isBaked?1:m0.emissiveIntensity});
+      mat.isBaked=true;
+    }
+    const bg=bakeGeo(list,m=>m.matrixWorld);
+    if (!vc) bg.deleteAttribute('color');
+    list.forEach(m=>m.parent.remove(m)); merged+=list.length;
+    const mm=new THREE.Mesh(bg,mat);
+    mm.castShadow=list[0].castShadow; mm.receiveShadow=list[0].receiveShadow;
+    mm.renderOrder=list[0].renderOrder;
+    scene.add(mm);
+  });
+  // 凍結不動的物件；會動的那幾棵樹（玩家、隊員、窗口前的人、維安、粉塵）照舊
+  (function freeze(o){
+    for (const c of o.children){
+      if (dyn.has(c)) continue;
+      c.updateMatrix(); c.matrixAutoUpdate=false;
+      freeze(c);
+    }
+  })(scene);
+  scene.updateMatrixWorld(true);
+  M.merged=merged;
+}
+/* 擋住鏡頭的柱子與牆變淡：從鏡頭往玩家的胸口與頭打射線，
+   再往玩家左右各一公尺半打兩條——擋住身邊視野的柱子也一樣礙事。 */
+const _ray=new THREE.Raycaster(), _rv=new THREE.Vector3(), _rt=new THREE.Vector3();
+function fadeOccluders(dt){
+  if (!M.occ) return;
+  const hit=new Set();
+  const cs=Math.cos(player.yaw), sn=Math.sin(player.yaw), side=player.wide?3:1.5;
+  for (const [ox,y] of [[0,.9],[0,1.7],[-side,1.2],[side,1.2]]){
+    _rt.set(player.pos[0]+cs*ox,y,player.pos[1]-sn*ox);
+    _rv.subVectors(_rt,cam.position); const d=_rv.length(); _rv.divideScalar(d);
+    _ray.set(cam.position,_rv); _ray.far=d-.35;
+    _ray.intersectObjects(M.occ,false).forEach(h=>hit.add(h.object));
+  }
+  const k=Math.min(1,dt*9);
+  M.occ.forEach(m=>{
+    const want=hit.has(m)?.16:1, u=m.userData;
+    if (Math.abs(u.fade-want)<.002) return;
+    u.fade+= (want-u.fade)*k; if (Math.abs(u.fade-want)<.01) u.fade=want;
+    const t=u.fade<.995;
+    m.material.opacity=u.fade; m.material.transparent=t; m.material.depthWrite=!t;
+  });
 }
 function onResize(){
   if (!renderer) return;
@@ -762,7 +1015,7 @@ function render3D(dt){
   // 來領藥（或來理論）的人
   M.pk = M.pk||[];
   while (M.pk.length < S.pickups.length){
-    const g=person(0xa9d3de); g.visible=false; scene.add(g);
+    const g=person(0xa9d3de,false,{own:true}); g.visible=false; scene.add(g);
     const mk=new THREE.Mesh(new THREE.PlaneGeometry(.62,.26),
       new THREE.MeshBasicMaterial({map:textTex('領　藥','#1a1206','#f0b95c'),transparent:true,depthTest:false}));
     mk.position.y=1.82; g.add(mk); g.userData.mk=mk;
@@ -793,6 +1046,13 @@ function render3D(dt){
   if (shake>0){ shake=Math.max(0,shake-dt*1.5); sx=fxRnd(-.25,.25)*shake; sy=fxRnd(-.2,.2)*shake; }
   cam.position.set(player.pos[0]-sn*dist+sx, ht+sy, player.pos[1]-cs*dist);
   cam.lookAt(player.pos[0]+sn*look, player.wide?.6:1.1, player.pos[1]+cs*look);
+  fadeOccluders(dt);
+  // 走路的擺動：玩家、隊員、幫手、來領藥的人、巡邏的維安
+  gait(M.player,dt);
+  M.npcs.forEach(n=>gait(n.g,dt));
+  M.helperNpcs.forEach(g=>{ if (g.visible) gait(g,dt); });
+  M.pk.forEach(g=>{ if (g.visible) gait(g,dt); });
+  M.sec.forEach(g=>{ if (g.visible) gait(g,dt); });
   // 讀數與燈
   if (!M.lastP || now-M.lastP>420){ M.lastP=now; drawFridge(); }
   const hot=S.fridge>8;
@@ -807,13 +1067,21 @@ function render3D(dt){
   M.lights.forEach(l=>l.intensity=S.genOn?l.userData.base:.16);
   M.lock.material.emissiveIntensity=1.0+Math.sin(now/700)*.35;
   if (dust) dust.rotation.y+=dt*0.012;
+  if (debris>(M.lastDebris||0)+.01){           // 新的一次打擊：碎屑回到上方重新落下
+    const p=debrisPts.geometry.attributes.position;
+    for (let i=0;i<p.count;i++) p.setY(i,M.debrisY[i]);
+    p.needsUpdate=true; }
   if (debris>0){ debris=Math.max(0,debris-dt*.35);
     debrisPts.material.opacity=debris*.7;
     const p=debrisPts.geometry.attributes.position;
     for (let i=0;i<p.count;i++){ p.setY(i, Math.max(0,p.getY(i)-dt*1.6)); }
     p.needsUpdate=true;
   }
+  M.lastDebris=debris;
   M.labels.forEach(sp=>{ const d=Math.hypot(sp.position.x-player.pos[0],sp.position.z-player.pos[1]);
     sp.material.opacity = player.wide?.6:Math.max(0,Math.min(.58,(d-3)/9)); });
+  // 陰影貼圖：畫質等級決定隔幾幀更新一次（場景靜態，只有人在動）
+  M.frame=(M.frame||0)+1;
+  if (renderer.shadowMap.enabled && M.frame%(perf.shadowEvery||1)===0) renderer.shadowMap.needsUpdate=true;
   renderer.render(scene,cam);
 }

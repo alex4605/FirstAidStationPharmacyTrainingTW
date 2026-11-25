@@ -274,6 +274,8 @@ function person(col, lying, kit){
   const longHair = kit.long!=null ? kit.long : Math.random()<.35;
   const mBody = kit.own ? new THREE.MeshStandardMaterial({color:col,roughness:.62}) : stdMat(col,.62);
   const mLeg=stdMat(trouser,.78), mSkin=stdMat(skin,.72), mShoe=stdMat(0x18191a,.55), mHair=stdMat(hair,.9);
+  // 全套防護（kit.ppe）：連身防護衣連頭套，藍色丁腈手套，看不到皮膚與頭髮
+  const mHand = kit.ppe ? stdMat(0x4f7fae,.45) : mSkin;
   const put=(par,geo,m,x,y,z,rx,rz)=>{ const o=new THREE.Mesh(geo,m);
     o.position.set(x,y,z); if(rx) o.rotation.x=rx; if(rz) o.rotation.z=rz; o.castShadow=true; par.add(o); return o; };
   /* 不會動的人（床上的病人、候診椅上的、靠牆睡的）用低面數版本：
@@ -300,7 +302,7 @@ function person(col, lying, kit){
   /* 一隻手臂：袖子＋前臂＋手，轉軸在肩 */
   const arm=(x,rx,rz)=>{ const a=new THREE.Group(); a.position.set(x,1.43+dy,0); a.rotation.set(rx,0,rz);
     put(a,G.sleeve,mBody,0,0,0); put(a,G.fore,kit.longSleeve===false?mSkin:mBody,0,-.31,0);
-    put(a,G.hand,mSkin,0,-.62,0); inner.add(a); return a; };
+    put(a,G.hand,mHand,0,-.62,0); inner.add(a); return a; };
   let l1,l2,a1,a2;
   if (flr){
     /* 坐在地上、背靠牆：兩腿往前伸直，鞋尖朝上；手擱在大腿上 */
@@ -327,11 +329,15 @@ function person(col, lying, kit){
   }
   const torso=put(inner,torsoGeo(lo),mBody,0,1.17+dy,0);
   put(inner,G.yoke,mBody,0,1.44+dy,0);
-  put(inner,G.neck,mSkin,0,1.55+dy,0);
+  put(inner,G.neck,kit.ppe?mBody:mSkin,0,1.55+dy,0);
   const hy=1.70+dy;
   put(inner,G.head,mSkin,0,hy,0);
   put(inner,G.nose,mSkin,0,hy-.015,.135);
-  if (kit.helmet==null){
+  if (kit.ppe){                                  // 頭套＋護目面罩＋口罩
+    put(inner,pgeo('hood',()=>new THREE.SphereGeometry(.152,12,9).scale(1,1.14,1.06)),mBody,0,hy+.01,-.012);
+    put(inner,pgeo('visor',()=>new THREE.BoxGeometry(.21,.09,.05)),stdMat(0x7fb4c8,.15,.1,0x1d3a44,.6),0,hy+.03,.13);
+    put(inner,pgeo('mask',()=>new THREE.BoxGeometry(.17,.08,.05)),stdMat(0xd2dde2,.7),0,hy-.065,.128);
+  } else if (kit.helmet==null){
     put(inner,G.hairc,mHair,0,hy+.018,-.012,-.42);
     if (longHair) put(inner,G.hairl,mHair,0,hy-.1,-.1);
   }
@@ -451,10 +457,14 @@ function dressStation(small){
   add(box(.62,.8,.24,0x39423f,{rough:.8,metal:.25}), -13.1,1.5,2.6);
   // 天花板通風管與灑水頭
   // 通風管沿著牆邊走，不要橫切活動空間
+  // 通風管在鏡頭高度附近，擋到視線時跟牆、柱子一樣變淡（各自一份材質）
+  const duct=(r,len)=>{ const d=new THREE.Mesh(geo(`C${r}|${len}|9`,()=>new THREE.CylinderGeometry(r,r,len,9)),
+    new THREE.MeshStandardMaterial({color:0x2b3336,roughness:.75,metalness:.3}));
+    d.userData.fade=1; M.occ.push(d); return d; };
   [[0,-9.1],[0,6.2]].forEach(([x,z])=>{
-    const d=cyl(.19,25,0x2b3336,9,.75,.3); d.rotation.z=Math.PI/2; add(d, x,3.2,z); });
+    const d=duct(.19,25); d.rotation.z=Math.PI/2; add(d, x,3.2,z); });
   [[-12.9,-1.5],[12.9,-1.5]].forEach(([x,z])=>{
-    const d=cyl(.17,15,0x2b3336,9,.75,.3); d.rotation.x=Math.PI/2; add(d, x,3.2,z); });
+    const d=duct(.17,15); d.rotation.x=Math.PI/2; add(d, x,3.2,z); });
   // 地上的舊油漬
   if (!small) [[-11.0,4.4,1.5],[8.6,3.2,1.1],[-1.2,5.0,.9],[10.4,-6.0,1.3]].forEach(([x,z,r])=>{
     const o=new THREE.Mesh(geo('oil'+r,()=>new THREE.CircleGeometry(r,14)), basicMat(0x080b0c,.45,{dw:false}));
@@ -667,6 +677,113 @@ function dressWalls(small){
   poster(3,-13.23,1.7,-0.3,Math.PI/2);                                // 發電機旁
   poster(1,13.23,1.6,1.6,-Math.PI/2); poster(5,13.23,1.75,-2.6,-Math.PI/2);
   poster(2,4.2,1.7,6.43,Math.PI,1.15);
+}
+/** 兩點之間的一段細管（點滴管、電線）：圓柱轉到 a→b 的方向 */
+const _ta=new THREE.Vector3(), _tb=new THREE.Vector3(), _tu=new THREE.Vector3(0,1,0);
+function tube(a,b,r,c){
+  _ta.set(...a); _tb.set(...b);
+  const len=_ta.distanceTo(_tb);
+  const m=new THREE.Mesh(geo(`tube${r}`,()=>new THREE.CylinderGeometry(r,r,1,5)), stdMat(c,.3));
+  m.scale.y=len; m.position.copy(_ta).add(_tb).multiplyScalar(.5);
+  m.quaternion.setFromUnitVectors(_tu, _tb.clone().sub(_ta).normalize());
+  scene.add(m); return m;
+}
+/* ---------- 醫療陳設 ----------
+   診療區、隔離區、遺體區原本只有地上的顏色與標牌。現在每一區看得出在做什麼：
+   ・診療區：檢查床上有正在處置的病人、處置燈、換藥車（紗布、膠帶、生理食鹽水）、手套架、針具收集盒；
+   ・隔離區帳篷裡：一張床、一位穿全套防護的人員；
+   ・遺體區：兩副蓋著白布的擔架，安靜地放在黑色屏風後面；
+   ・車道口：兩側堆了沙包牆——這是戰時，不是演習。 */
+function dressMedical(small){
+  const add=o=>{ scene.add(o); return o; };
+  const cyl=(r,h,c,seg,rough,metal)=>new THREE.Mesh(
+    geo(`C${r}|${h}|${seg||8}`,()=>new THREE.CylinderGeometry(r,r,h,seg||8)), stdMat(c,rough==null?.7:rough,metal||0));
+  /* 摺疊檢查床：沿 x 方向擺，頭在 -x 端 */
+  const cot=(x,z,col,pat,ry)=>{
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=ry||0;
+    const top=box(1.95,.08,.68,col||0x4f5f58,{rough:.85}); top.position.y=.58; g.add(top);
+    [[-.88,-.28],[.88,-.28],[-.88,.28],[.88,.28]].forEach(([lx,lz])=>{
+      const l=cyl(.025,.56,0x6a7470,6,.5,.4); l.position.set(lx,.28,lz); g.add(l); });
+    const pw=box(.36,.1,.5,0xd8d8d0,{rough:.9}); pw.position.set(-.74,.66,0); g.add(pw);       // 枕頭
+    if (pat){
+      const pp=person(pat,true,{skin:SKIN[Math.floor(Math.random()*4)],trouser:0x39423f,lo:true});
+      pp.position.set(0,.62,0); pp.rotation.y=Math.PI/2; g.add(pp);
+      const sh=box(.9,.18,.64,0xc9cfcb,{rough:.95}); sh.position.set(.5,.74,0); g.add(sh);     // 被單蓋腿
+    }
+    add(g); aoDecal(x,z,2.4,1.2,ry);
+    return g;
+  };
+  /* 處置燈：底座＋立桿＋彎過去的燈頭 */
+  const procLamp=(x,z,ry)=>{
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=ry||0;
+    const b=cyl(.22,.05,0x3a4246,10,.6,.4); b.position.y=.03; g.add(b);
+    const p=cyl(.022,1.7,0x8a9290,6,.4,.6); p.position.y=.87; g.add(p);
+    const arm=cyl(.018,.6,0x8a9290,6,.4,.6); arm.rotation.z=Math.PI/2.6; arm.position.set(.26,1.78,0); g.add(arm);
+    const h=new THREE.Mesh(geo('plh',()=>new THREE.CylinderGeometry(.08,.16,.12,12)),stdMat(0xd8dcd8,.4,0,0xfff2d8,.9));
+    h.position.set(.52,1.86,0); g.add(h);
+    add(g); return h;
+  };
+  /* 換藥車：兩層，上面是紗布卷、膠帶、生理食鹽水瓶、彎盆 */
+  const dressCart=(x,z,ry)=>{
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=ry||0;
+    [.82,.42].forEach(y=>{ const d=box(.72,.04,.46,0xb8beba,{rough:.35,metal:.5}); d.position.y=y; g.add(d); });
+    [[-.33,-.2],[.33,-.2],[-.33,.2],[.33,.2]].forEach(([lx,lz])=>{
+      const l=cyl(.015,.82,0x9aa19e,6,.35,.6); l.position.set(lx,.41,lz); g.add(l); });
+    for (let i=0;i<4;i++){ const r=cyl(.045,.08,0xeeeae0,10,.9); r.rotation.z=Math.PI/2;
+      r.position.set(-.24+i*.1,.89,-.1); g.add(r); }                                          // 紗布卷
+    const tp=cyl(.04,.035,0xdad2c0,10,.6); tp.position.set(.08,.86,.12); g.add(tp);            // 膠帶
+    [0,1].forEach(i=>{ const bt=cyl(.04,.2,0xd8eef0,8,.15); bt.position.set(.2+i*.1,.94,-.08); g.add(bt); }); // 食鹽水
+    const kb=box(.2,.04,.1,0xb8beba,{rough:.3,metal:.6}); kb.position.set(-.18,.86,.13); g.add(kb); // 彎盆
+    const lo=box(.5,.14,.36,0x3e5a6a,{rough:.8}); lo.position.y=.51; g.add(lo);                // 下層收納箱
+    add(g);
+  };
+  /* 牆上／柱上的手套盒架與針具收集盒 */
+  const gloveRack=(x,y,z,ry)=>{ const g=new THREE.Group(); g.position.set(x,y,z); g.rotation.y=ry||0;
+    const fr=box(.78,.3,.14,0xb8beba,{rough:.4,metal:.4}); g.add(fr);
+    [0x4f7fae,0x8a6ab0,0xe0e0dc].forEach((c,i)=>{ const b=box(.22,.12,.12,c,{rough:.7}); b.position.set(-.25+i*.25,-.02,.03); g.add(b); });
+    add(g); };
+  const sharps=(x,y,z)=>{ const s=box(.2,.26,.14,0xd8c22a,{rough:.6}); s.position.set(x,y,z); add(s);
+    const l=box(.22,.05,.16,0xc8382c,{rough:.6}); l.position.set(x,y+.15,z); add(l); };
+
+  // 診療區一：一位手臂包紮中的傷患，處置燈打在床上
+  cot(-6.6,-2.7,0x4f5f58,0xb0453c);
+  procLamp(-7.5,-1.9,0);
+  dressCart(-5.3,-3.3,.25);
+  gloveRack(-4.5,1.5,-1.08);                              // 柱子 B2-03 背面
+  sharps(-4.5,1.15,-1.06);
+  // 診療區二：兩張床，一張有人
+  cot(-6.6,2.3,0x4f5f58,0xc09a3e);
+  cot(-3.4,4.6,0x55635c,null);
+  if (!small){ procLamp(-7.5,3.2,0); dressCart(-5.2,1.6,-.2); }
+  gloveRack(-4.5,1.5,3.92); sharps(-4.1,1.15,3.92);
+  // 隔離帳篷裡
+  cot(5.2,-7.2,0x5a6a66,0x4a8a62);
+  { const w=person(0xe6ebee,false,{trouser:0xe6ebee,ppe:true,exact:true,lo:true});
+    w.position.set(6.3,0,-6.2); w.rotation.y=-Math.PI*0.75; add(w); }
+  if (!small) dressCart(4.0,-5.6,.4);
+  // 遺體區：屏風後面兩副蓋白布的擔架
+  [[11.7,-7.7],[11.7,-5.5]].forEach(([x,z])=>{
+    const st=box(1.95,.06,.62,0x3a4448,{rough:.6,metal:.3}); st.position.set(x,.2,z); add(st);
+    [[-.85],[.85]].forEach(([lx])=>{ const h=box(.06,.2,.62,0x3a4448,{rough:.6,metal:.3}); h.position.set(x+lx,.1,z); add(h); });
+    const sheet=box(1.85,.2,.6,0xd6d6cf,{rough:.95}); sheet.position.set(x+.05,.33,z); add(sheet);
+    const hd=new THREE.Mesh(geo('shh',()=>new THREE.SphereGeometry(.15,8,6).scale(1,.7,1.2)),stdMat(0xd6d6cf,.95));
+    hd.position.set(x-.72,.42,z); add(hd);
+    const tag=box(.1,.02,.06,0xd9c05e,{rough:.6}); tag.position.set(x+.86,.44,z+.18); add(tag);   // 身分牌
+    aoDecal(x,z,2.3,1.1);
+  });
+  // 車道口兩側的沙包牆
+  const sand=[0x7a6e55,0x6e6450,0x847659,0x6a604c];
+  const sandbag=(x,y,z,ry,k)=>{ const m=new THREE.Mesh(
+    geo('sbag',()=>new THREE.CylinderGeometry(.15,.15,.56,8).rotateZ(Math.PI/2).scale(1,.58,1)), stdMat(sand[k%4],.98));
+    m.position.set(x,y,z); m.rotation.y=ry+fxRnd(-.08,.08); m.castShadow=true; m.receiveShadow=true; add(m); };
+  [[1.15,2.75],[7.25,8.85]].forEach(([x0,x1],w)=>{
+    let k=w*7;
+    for (let row=0;row<4;row++){
+      const off=row%2?.28:0;
+      for (let x=x0+off;x<=x1-.25;x+=.56) sandbag(x+.28,.09+row*.17,-9.05,0,k++);
+    }
+    aoDecal((x0+x1)/2,-9.05,x1-x0+.6,.9);
+  });
 }
 /* ---------- 避難的人 ----------
    開場文字說地下室裡有兩百多個避難的人，畫面上原本只有八張折疊椅。
@@ -890,6 +1007,9 @@ function init3D(){
       bl.position.set(bx,.6,bz+.52); scene.add(bl); }
     const iv=box(.05,1.5,.05,0x39454a); iv.position.set(bx+.6,.75,bz-.7); scene.add(iv);
     const bag=box(.16,.24,.08,0x9fd6cf,{emissive:0x1a2a28}); bag.position.set(bx+.6,1.42,bz-.7); scene.add(bag);
+    if (i<7){                                   // 點滴管：從袋子垂下來，繞一個弧，接到病人手上
+      tube([bx+.6,1.3,bz-.7],[bx+.56,.86,bz-.62],.008,0xcfe3e0);
+      tube([bx+.56,.86,bz-.62],[bx+.3,.6,bz-.38],.008,0xcfe3e0); }
   }
   // 氧氣鋼瓶
   [[3.6,-8.2],[4.2,-8.2],[-2.4,4.6]].forEach(([x,z])=>{
@@ -962,6 +1082,7 @@ function init3D(){
   dressStation(small);
   dressWalls(small);
   dressCrowd(small);
+  dressMedical(small);
 
   // 燈光
   /* 原本是一盞平的環境光（0.58），所有東西四面一樣亮，人看起來是剪紙。

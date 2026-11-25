@@ -254,9 +254,9 @@ const pgeo = geo;
 const SKIN=[0xd8c6ab,0xcdb694,0xe0cdb4,0xc2a888];
 const HAIR=[0x161311,0x201a16,0x2c231c,0x3b2f26,0x121010,0x6f6a64];
 /** 軀幹：一條側面輪廓轉一圈（臀→腰→胸→肩），再把前後壓扁 */
-const torsoGeo=()=>pgeo('torso2',()=>new THREE.LatheGeometry([
+const torsoGeo=lo=>pgeo('torso2'+(lo?'L':''),()=>new THREE.LatheGeometry([
   [.001,-.34],[.215,-.34],[.245,-.26],[.235,-.12],[.212,-.02],[.228,.10],[.252,.20],[.25,.28],[.20,.34],[.10,.37],[.001,.37]
-].map(([r,y])=>new THREE.Vector2(r,y)),14).scale(1,1,.70));
+].map(([r,y])=>new THREE.Vector2(r,y)),lo?9:14).scale(1,1,.70));
 /** 把一個群組裡（除了 skip 之外）的網格烘成一個，留在原位 */
 function bakeChildren(grp, skip){
   const list=grp.children.filter(o=>o.isMesh && !skip.has(o));
@@ -276,29 +276,41 @@ function person(col, lying, kit){
   const mLeg=stdMat(trouser,.78), mSkin=stdMat(skin,.72), mShoe=stdMat(0x18191a,.55), mHair=stdMat(hair,.9);
   const put=(par,geo,m,x,y,z,rx,rz)=>{ const o=new THREE.Mesh(geo,m);
     o.position.set(x,y,z); if(rx) o.rotation.x=rx; if(rz) o.rotation.z=rz; o.castShadow=true; par.add(o); return o; };
+  /* 不會動的人（床上的病人、候診椅上的、靠牆睡的）用低面數版本：
+     他們佔了一半以上的人數，但永遠不會走到鏡頭前面。 */
+  const lo=!!kit.lo, K=k=>k+(lo?'L':'');
   const G={
-    thigh: pgeo('thigh2',()=>new THREE.CylinderGeometry(.088,.066,.84,8).translate(0,-.42,0)),
+    thigh: pgeo(K('thigh2'),()=>new THREE.CylinderGeometry(.088,.066,.84,lo?6:8).translate(0,-.42,0)),
     shoe:  pgeo('shoe',()=>new THREE.BoxGeometry(.12,.08,.25)),
-    sleeve:pgeo('sleeve',()=>new THREE.CylinderGeometry(.068,.058,.32,8).translate(0,-.16,0)),
-    fore:  pgeo('fore',()=>new THREE.CylinderGeometry(.052,.044,.28,7).translate(0,-.14,0)),
-    hand:  pgeo('hand',()=>new THREE.SphereGeometry(.05,6,4).scale(.9,1.2,.75)),
-    yoke:  pgeo('yoke',()=>new THREE.SphereGeometry(.28,14,8).scale(1,.32,.64)),
-    neck:  pgeo('neck2',()=>new THREE.CylinderGeometry(.056,.062,.11,7)),
-    head:  pgeo('head2',()=>new THREE.SphereGeometry(.132,12,9).scale(1,1.14,1.04)),
-    hairc: pgeo('hairc',()=>new THREE.SphereGeometry(.142,12,6,0,Math.PI*2,0,Math.PI*.56).scale(1,1.12,1.06)),
+    sleeve:pgeo(K('sleeve'),()=>new THREE.CylinderGeometry(.068,.058,.32,lo?6:8).translate(0,-.16,0)),
+    fore:  pgeo(K('fore'),()=>new THREE.CylinderGeometry(.052,.044,.28,lo?5:7).translate(0,-.14,0)),
+    hand:  pgeo(K('hand'),()=>new THREE.SphereGeometry(.05,lo?4:6,lo?3:4).scale(.9,1.2,.75)),
+    yoke:  pgeo(K('yoke'),()=>new THREE.SphereGeometry(.28,lo?9:14,lo?5:8).scale(1,.32,.64)),
+    neck:  pgeo(K('neck2'),()=>new THREE.CylinderGeometry(.056,.062,.11,lo?5:7)),
+    head:  pgeo(K('head2'),()=>new THREE.SphereGeometry(.132,lo?8:12,lo?6:9).scale(1,1.14,1.04)),
+    hairc: pgeo(K('hairc'),()=>new THREE.SphereGeometry(.142,lo?8:12,lo?4:6,0,Math.PI*2,0,Math.PI*.56).scale(1,1.12,1.06)),
     hairl: pgeo('hairl',()=>new THREE.BoxGeometry(.24,.24,.08)),
     nose:  pgeo('nose',()=>new THREE.BoxGeometry(.035,.05,.045)),
-    seatT: pgeo('seatT',()=>new THREE.CylinderGeometry(.09,.08,.44,8)),
-    seatS: pgeo('seatS',()=>new THREE.CylinderGeometry(.072,.062,.44,8)),
+    seatT: pgeo(K('seatT'),()=>new THREE.CylinderGeometry(.09,.08,.44,lo?6:8)),
+    seatS: pgeo(K('seatS'),()=>new THREE.CylinderGeometry(.072,.062,.44,lo?6:8)),
     coat:  pgeo('coat',()=>new THREE.CylinderGeometry(.252,.29,.36,14,1,true).scale(1,1,.74)),
   };
-  const sit=!!kit.sit, dy = sit ? -.37 : 0;       // 坐著的時候上半身整個降到椅面上
+  // 坐椅子：上半身降到椅面（.47）；坐地上（kit.floor）：降到地面，腿往前伸直
+  const flr=!!kit.floor, sit=!!kit.sit||flr, dy = flr ? -.80 : sit ? -.37 : 0;
   /* 一隻手臂：袖子＋前臂＋手，轉軸在肩 */
   const arm=(x,rx,rz)=>{ const a=new THREE.Group(); a.position.set(x,1.43+dy,0); a.rotation.set(rx,0,rz);
     put(a,G.sleeve,mBody,0,0,0); put(a,G.fore,kit.longSleeve===false?mSkin:mBody,0,-.31,0);
     put(a,G.hand,mSkin,0,-.62,0); inner.add(a); return a; };
   let l1,l2,a1,a2;
-  if (sit){
+  if (flr){
+    /* 坐在地上、背靠牆：兩腿往前伸直，鞋尖朝上；手擱在大腿上 */
+    [-.1,.1].forEach(x=>{
+      put(inner,G.seatT,mLeg,x,.085,.22,Math.PI/2);
+      put(inner,G.seatS,mLeg,x,.075,.64,Math.PI/2);
+      put(inner,G.shoe,mShoe,x,.12,.88,-Math.PI/2);
+    });
+    a1=arm(-.26,-.55,.1); a2=arm(.26,-.55,-.1);
+  } else if (sit){
     /* 坐著：大腿往前、小腿往下、鞋子踩地；手放在膝上 */
     [-.1,.1].forEach(x=>{
       put(inner,G.seatT,mLeg,x,.47,.2,Math.PI/2);
@@ -313,7 +325,7 @@ function person(col, lying, kit){
     a1=arm(-.285,-.06,.09); a2=arm(.285,-.06,-.09);
     if (kit.coat) put(inner,G.coat,mBody,0,.76,0);          // 白袍下襬
   }
-  const torso=put(inner,torsoGeo(),mBody,0,1.17+dy,0);
+  const torso=put(inner,torsoGeo(lo),mBody,0,1.17+dy,0);
   put(inner,G.yoke,mBody,0,1.44+dy,0);
   put(inner,G.neck,mSkin,0,1.55+dy,0);
   const hy=1.70+dy;
@@ -348,12 +360,14 @@ function person(col, lying, kit){
   bakeChildren(inner,skip);
   [l1,l2,a1,a2].forEach(l=>{ if (l) bakeChildren(l,skip); });
   // 體型：寬窄、高矮略有不同
-  if (!kit.exact){ const bw=fxRnd(.93,1.08); inner.scale.set(bw,fxRnd(.95,1.04),bw); }
+  if (kit.child) inner.scale.setScalar(kit.child);          // 小孩：整個人等比例縮小
+  else if (!kit.exact){ const bw=fxRnd(.93,1.08); inner.scale.set(bw,fxRnd(.95,1.04),bw); }
+  const sc=inner.scale.y;
   if (lying){                                   // 仰躺：頭朝 -z，臉朝上
-    inner.rotation.x=-Math.PI/2; inner.position.set(0,.15,.9);
+    inner.rotation.x=-Math.PI/2; inner.position.set(0,.15*sc,.9*sc);
   } else {                                      // 腳下的軟影子
     const b=new THREE.Mesh(pgeo('blob',()=>new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2)), blobMat());
-    b.scale.set(sit?.95:.8,1,sit?1.05:.8); b.position.set(0,.034,sit?.12:0); b.renderOrder=1;
+    b.scale.set((sit?.95:.8)*sc,1,(flr?1.5:sit?1.05:.8)*sc); b.position.set(0,.034,(flr?.4:sit?.12:0)*sc); b.renderOrder=1;
     g.add(b);
   }
   return g;
@@ -654,6 +668,59 @@ function dressWalls(small){
   poster(1,13.23,1.6,1.6,-Math.PI/2); poster(5,13.23,1.75,-2.6,-Math.PI/2);
   poster(2,4.2,1.7,6.43,Math.PI,1.15);
 }
+/* ---------- 避難的人 ----------
+   開場文字說地下室裡有兩百多個避難的人，畫面上原本只有八張折疊椅。
+   他們沿著牆睡在地墊上、背靠著牆坐著，身邊是全部的家當。
+   全部靜態：人共用同一份頂點色材質，家當依質感共用，合併後只多幾次 draw call。 */
+function dressCrowd(small){
+  const CLO=[0x5d6a72,0x7a6a5c,0x6b5f6e,0x5f6e5c,0x8a7a62,0x4f5a66,0x76665e,0x6a7474,0x80606a,0x5a6658];
+  const TRO=[0x2b3236,0x33302a,0x2a2f38,0x3a3530,0x262a2e];
+  const BLK=[0x5c4a3e,0x3e4f5e,0x6a5a3a,0x4a5a4a,0x6a4a4e,0x58606a];
+  const MAT=[0x2f4a6a,0x4a6a4a,0x55585a,0x6a5a3a];
+  let ci=0; const nextC=()=>CLO[(ci++)%CLO.length];
+  const add=o=>{ scene.add(o); return o; };
+  // 地墊上睡覺的人：沿著牆，頭朝西（-x），毯子蓋到肩膀
+  const sleeper=(x,z,child)=>{
+    const m=box(child?1.25:1.95,.04,child?.55:.72,MAT[ci%MAT.length],{rough:.95}); m.position.set(x+.05,.02,z); add(m);
+    const pp=person(nextC(),true,{trouser:TRO[ci%TRO.length],skin:SKIN[ci%4],child:child?.6:0,lo:true});
+    pp.position.set(x,.04,z); pp.rotation.y=Math.PI/2; add(pp);
+    const L=child?1.0:1.5;
+    const bl=box(L,.26*(child?.65:1),(child?.5:.7),BLK[ci%BLK.length],{rough:.97});
+    bl.position.set(x+L*.12,.04+.22*(child?.65:1),z); bl.rotation.y=fxRnd(-.06,.06); add(bl);
+    // 枕頭：捲起來的外套
+    const pl=box(.34,.1,.26*(child?.8:1),0x4a4842,{rough:.95}); pl.position.set(x-(child?.62:.98),.08,z); add(pl);
+  };
+  // 背靠牆坐在地上的人（面向 -z，靠著南牆）
+  const leaner=(x,z,ry,child)=>{
+    const g=person(nextC(),false,{trouser:TRO[ci%TRO.length],skin:SKIN[ci%4],floor:true,child:child?.6:0,lo:true});
+    g.position.set(x,0,z); g.rotation.y=ry; add(g);
+  };
+  // 家當
+  const bag=(x,z,c,ry)=>{ const b=box(.36,.42,.22,c||0x3e4446,{rough:.9}); b.position.set(x,.21,z); b.rotation.y=ry||fxRnd(-.6,.6); add(b); };
+  const duffel=(x,z,c)=>{ const d=new THREE.Mesh(geo('duf',()=>new THREE.CylinderGeometry(.17,.17,.62,10)),stdMat(c||0x2a3a4a,.85));
+    d.rotation.z=Math.PI/2; d.rotation.y=fxRnd(-.5,.5); d.position.set(x,.17,z); d.castShadow=true; add(d); };
+  const bottle=(x,z)=>{ const b=new THREE.Mesh(geo('btl',()=>new THREE.CylinderGeometry(.035,.035,.24,8)),stdMat(0x7fa8c0,.25));
+    b.position.set(x,.12,z); add(b); };
+  const folded=(x,z,n)=>{ for (let i=0;i<n;i++){ const f=box(.5,.07,.4,BLK[(ci+i)%BLK.length],{rough:.97});
+    f.position.set(x,.035+i*.07,z); f.rotation.y=fxRnd(-.15,.15); add(f); } };
+  const thermos=(x,z)=>{ const t=new THREE.Mesh(geo('thm',()=>new THREE.CylinderGeometry(.05,.05,.3,9)),stdMat(0x8a3a32,.4,.3));
+    t.position.set(x,.15,z); add(t); };
+
+  // 公共空間南牆邊：一家四口、隔壁一對老夫婦、再過去幾個獨自來的人
+  sleeper(-1.0,5.55); sleeper(-1.05,4.75,true);
+  leaner(.55,6.05,Math.PI); leaner(1.05,6.05,Math.PI,true);
+  bag(.1,5.5,0x4b4238); bottle(.3,5.3); bottle(.38,5.33); thermos(1.45,5.7);
+  sleeper(2.4,5.6); leaner(3.6,6.05,Math.PI); folded(4.25,5.75,3);
+  duffel(1.7,5.1,0x2a3a4a); bag(3.1,5.2,0x3e4446);
+  // 留觀區南側（機車格旁）：等家人的人
+  if (!small){
+    sleeper(6.3,5.6); leaner(7.6,6.05,Math.PI); leaner(8.15,6.05,Math.PI,true);
+    duffel(8.9,5.6,0x4a3a2a); bottle(7.1,5.4); folded(9.4,5.8,2);
+  }
+  // 公共空間候診椅旁也有人直接坐在地上
+  leaner(-1.75,2.4,Math.PI/2); bottle(-1.4,2.9);
+  if (!small){ leaner(4.6,2.2,-Math.PI/2,true); bag(4.55,1.5,0x5a4038); }
+}
 function init3D(){
   const canvas=$('scene');
   const small=MOBILE();
@@ -817,7 +884,7 @@ function init3D(){
     const bx=6.3+(i%5)*1.6, bz=-2.4+Math.floor(i/5)*4.6;
     const b=box(.82,.36,2.0,0x232e31,{rough:.8}); b.position.set(bx,.18,bz); scene.add(b);
     aoDecal(bx,bz,1.35,2.6);
-    if (i<7){ const pp=person([0xb0453c,0xc09a3e,0x4a8a62][i%3],true,{skin:SKIN[i%SKIN.length],trouser:0x39423f});
+    if (i<7){ const pp=person([0xb0453c,0xc09a3e,0x4a8a62][i%3],true,{skin:SKIN[i%SKIN.length],trouser:0x39423f,lo:true});
       pp.position.set(bx,.36,bz); scene.add(pp);
       const bl=box(.78,.28,1.0,[0x5f6b66,0x6b6458,0x58626b][i%3],{rough:.95});   // 毯子蓋到腰：上衣的檢傷顏色要看得到
       bl.position.set(bx,.6,bz+.52); scene.add(bl); }
@@ -836,7 +903,7 @@ function init3D(){
     const sit = i<6;                       // 有椅子的就坐著，站著的是還在等叫號的
     const g=person(CIV[i%CIV.length], false,
       {trouser:[0x2b3236,0x33302a,0x2a2f38][i%3], skin:SKIN[i%SKIN.length],
-       cap: i===2?0x4a4238 : null, pack: i===5?0x4b4238 : null, sit});
+       cap: i===2?0x4a4238 : null, pack: i===5?0x4b4238 : null, sit, lo:true});
     g.position.set(x,0,z); g.rotation.y = sit ? (Math.PI*1.1+fxRnd(-.35,.35)) : fxRnd(0,6.2);
     scene.add(g);
     if (sit){                               // 折疊椅：椅面加靠背
@@ -850,14 +917,14 @@ function init3D(){
 
   // 行政區：站長坐在折疊桌前
   {
-    const g=person(0xbdb6a4,false,{trouser:0x3a4247,skin:SKIN[1],sit:true,badge:0xc9a24e});
+    const g=person(0xbdb6a4,false,{trouser:0x3a4247,skin:SKIN[1],sit:true,badge:0xc9a24e,lo:true});
     g.position.set(-10.5,0,-6.6); g.rotation.y=Math.PI*0.95; scene.add(g);
     const ch=box(.52,.05,.5,0x2a3236); ch.position.set(-10.5,.42,-6.6); scene.add(ch);
     const bk=box(.52,.44,.05,0x2a3236); bk.position.set(-10.5,.64,-6.36); scene.add(bk);
   }
   // 檢傷掛號桌後面坐著一位護理師
   {
-    const g=person(ROLECOL.nurse,false,{trouser:0x39505a,cap:0xdfe6e2,skin:SKIN[2],sit:true});
+    const g=person(ROLECOL.nurse,false,{trouser:0x39505a,cap:0xdfe6e2,skin:SKIN[2],sit:true,lo:true});
     g.position.set(-.4,0,-4.5); g.rotation.y=0; scene.add(g);
     const ch=box(.52,.05,.5,0x2a3236); ch.position.set(-.4,.42,-4.5); scene.add(ch);
     const bk=box(.52,.44,.05,0x2a3236); bk.position.set(-.4,.64,-4.26); scene.add(bk);
@@ -894,6 +961,7 @@ function init3D(){
 
   dressStation(small);
   dressWalls(small);
+  dressCrowd(small);
 
   // 燈光
   /* 原本是一盞平的環境光（0.58），所有東西四面一樣亮，人看起來是剪紙。

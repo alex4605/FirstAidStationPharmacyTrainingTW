@@ -108,6 +108,24 @@ function concreteTex(){
   t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
   return t;
 }
+/* 地面的粗糙度：大部分是乾的粗水泥，有幾塊被鞋子、推車磨亮的地方，
+   燈打下來會在那幾塊留下一點反光。值越小越亮（roughnessMap 讀綠色通道）。 */
+function roughTex(){
+  const N=128, c=document.createElement('canvas'); c.width=c.height=N;
+  const g=c.getContext('2d'), im=g.createImageData(N,N), d=im.data, rr=mulberry(0x2ff);
+  const G=5, grid=[]; for (let i=0;i<G*G;i++) grid.push(rr());
+  const at=(x,y)=>grid[((y%G+G)%G)*G+((x%G+G)%G)], sm=t=>t*t*(3-2*t);
+  for (let y=0;y<N;y++) for (let x=0;x<N;x++){
+    const fx=x/N*G, fy=y/N*G, x0=Math.floor(fx), y0=Math.floor(fy), tx=sm(fx-x0), ty=sm(fy-y0);
+    const a=at(x0,y0)+(at(x0+1,y0)-at(x0,y0))*tx, b=at(x0,y0+1)+(at(x0+1,y0+1)-at(x0,y0+1))*tx;
+    const n=a+(b-a)*ty;                                  // 0..1
+    const v=n>.62 ? .5+(1-n)*.55 : .86+(rr()-.5)*.08;     // 磨亮的那幾塊約 0.5–0.7
+    const k=(y*N+x)*4, q=Math.max(0,Math.min(255,v*255));
+    d[k]=d[k+1]=d[k+2]=q; d[k+3]=255;
+  }
+  g.putImageData(im,0,0);
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
 function mulberry(a){ return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 /** 方塊六個面各自依實際尺寸放大 UV（BoxGeometry 的面順序：±x、±y、±z，每面四個頂點） */
@@ -546,6 +564,96 @@ function dressStation(small){
     add(m,x,2.35,z);
     add(cyl(.012,.55,0x4a5458,6,.6,.4), x,2.6,z); });
 }
+/* ---------- 牆面 ----------
+   北牆（藥局後面那一面）幾乎每個畫面都看得到，原本是一整片空的深灰。
+   地下停車場的牆上其實很擠：消防灑水主管（紅）、給水管、電線管與接線盒、
+   漆到一公尺高的牆裙；變成急救站之後又貼滿了告示。全部靜態，合併後幾次 draw call。 */
+function posterAtlas(){
+  const W=1024,H=512,c=document.createElement('canvas'); c.width=W; c.height=H;
+  const g=c.getContext('2d');
+  const cell=(i,bg,fg,title,lines,draw)=>{
+    const x=(i%4)*256, y=Math.floor(i/4)*256;
+    g.save(); g.translate(x,y);
+    g.fillStyle=bg; g.fillRect(4,4,248,248);
+    g.fillStyle='rgba(0,0,0,.12)'; g.fillRect(4,236,248,16);            // 下緣受潮
+    g.fillStyle=fg; g.font='700 30px "Noto Sans TC",sans-serif'; g.textAlign='center';
+    g.fillText(title,128,46);
+    g.fillRect(28,58,200,3);
+    g.font='500 19px "Noto Sans TC",sans-serif';
+    lines.forEach((l,k)=>g.fillText(l,128,92+k*28));
+    if (draw) draw(g);
+    g.fillStyle='rgba(200,200,190,.5)';                                  // 膠帶
+    g.fillRect(14,0,40,14); g.fillRect(202,0,40,14);
+    g.restore();
+  };
+  cell(0,'#d8d2c0','#3a3226','藥品　五對',['對病人','對藥品','對劑量','對途徑','對時間']);
+  cell(1,'#dfe6e2','#24506a','洗手七步驟',['內　外　夾','弓　大　立','腕','（每位病人前後）']);
+  cell(2,'#2b2f2a','#e6d36b','防空避難',['B2 避難室','容納 480 人','警報時','關閉車道鐵捲門','勿使用電梯']);
+  cell(3,'#c94a3a','#f3e6d8','禁止吸菸',['NO SMOKING','發電機與','氧氣鋼瓶區'],g=>{
+    g.strokeStyle='#f3e6d8'; g.lineWidth=8; g.beginPath(); g.arc(128,200,30,0,6.3); g.stroke();
+    g.beginPath(); g.moveTo(107,179); g.lineTo(149,221); g.stroke(); });
+  cell(4,'#e3dccb','#5a2a22','管制藥品',['雙人核對','雙人簽名','空瓶繳回','櫃子隨手上鎖']);
+  cell(5,'#d6dccf','#2f4a3a','檢傷分級',['紅　立即','黃　緊急','綠　非緊急','黑　死亡']);
+  cell(6,'#e0d9c6','#3a3226','值班表　第四天',['藥師　1（白班）','護理　3','醫師　3','志工　＿＿']);
+  cell(7,'#1c2124','#7fbf8f','急救站平面圖',['','',''],g=>{
+    g.strokeStyle='#7fbf8f'; g.lineWidth=2; g.strokeRect(36,74,184,130);
+    [[36,74,46,40],[82,74,46,40],[128,74,46,40],[174,74,46,40],[36,114,46,45],[82,114,80,90]].forEach(r=>g.strokeRect(...r));
+    g.fillStyle='#d99a3c'; g.beginPath(); g.arc(105,94,6,0,6.3); g.fill();
+    g.font='500 15px "Noto Sans TC",sans-serif'; g.fillStyle='#7fbf8f'; g.fillText('● 你在這裡',128,228); });
+  const t=new THREE.CanvasTexture(c);
+  t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+function dressWalls(small){
+  const add=o=>{ scene.add(o); return o; };
+  // 管線：水平管走在牆的上緣，偶爾有一段垂直管下來
+  const pipe=(len,r,c,horizontal)=>{ const m=new THREE.Mesh(
+    geo(`pipe${len}|${r}`,()=>new THREE.CylinderGeometry(r,r,len,10)), stdMat(c,.55,.35));
+    if (horizontal) m.rotation.z=Math.PI/2; m.castShadow=false; m.receiveShadow=true; return m; };
+  const runs=[                          // [x, y, z, 長, 半徑, 顏色]
+    [0,3.05,-9.33,26.4,.075,0x7a2e28],  // 消防灑水主管
+    [0,2.82,-9.36,26.4,.05,0x4f5a5c],   // 給水管
+    [0,2.95,6.33,26.4,.075,0x7a2e28],
+  ];
+  runs.forEach(([x,y,z,l,r,c])=>{ const m=pipe(l,r,c,true); m.position.set(x,y,z); add(m); });
+  // 管子的吊架
+  for (let x=-12;x<=12;x+=3){ const h=box(.04,.3,.1,0x3a4246,{rough:.6,metal:.4}); h.position.set(x,3.2,-9.36); add(h); }
+  // 垂直管：從主管下到消防栓箱、到洗手台的方向
+  [[-12.4,-9.33,0x7a2e28,.06],[3.2,-9.36,0x4f5a5c,.045],[10.2,-9.36,0x4f5a5c,.045]].forEach(([x,z,c,r])=>{
+    const m=pipe(2.2,r,c,false); m.position.set(x,1.95,z); add(m); });
+  // 電線管與接線盒（北牆、西牆）
+  { const m=pipe(26.4,.022,0x8a9290,true); m.position.set(0,2.55,-9.42); add(m); }
+  [-10.8,-6.6,-2.2,2.5,7.4,11.6].forEach(x=>{
+    const b=box(.16,.16,.07,0x9aa19e,{rough:.5,metal:.2}); b.position.set(x,2.55,-9.41); add(b);
+    if (!small){ const d=pipe(1.2,.02,0x8a9290,false); d.position.set(x,1.95,-9.42); add(d);
+      const sw=box(.1,.14,.03,0xc9cdc8,{rough:.5}); sw.position.set(x,1.32,-9.42); add(sw); } });
+  // 牆裙：一公尺高的漆，加一條細線
+  const band=(x,z,w,ry)=>{
+    const m=new THREE.Mesh(geo(`band${w}`,()=>new THREE.PlaneGeometry(w,1.0)), stdMat(0x24302c,.9));
+    m.position.set(x,.5,z); m.rotation.y=ry; m.receiveShadow=true; add(m);
+    const l=new THREE.Mesh(geo(`bandl${w}`,()=>new THREE.PlaneGeometry(w,.05)), stdMat(0x7c8a6a,.8));
+    l.position.set(x,1.02,z); l.rotation.y=ry; add(l); };
+  band(0,-9.44,26.4,0); band(0,6.44,26.4,Math.PI);
+  band(-13.24,-1.5,16,Math.PI/2); band(13.24,-1.5,16,-Math.PI/2);
+  // 告示：一張貼圖集，每張海報只是 UV 不同
+  const tex=posterAtlas(), pm=new THREE.MeshStandardMaterial({map:tex,roughness:.85});
+  TEXDRAW.push(()=>{ const n=posterAtlas(); tex.image=n.image; tex.needsUpdate=true; });
+  const poster=(i,x,y,z,ry,s)=>{
+    const g=new THREE.PlaneGeometry(.62*(s||1),.62*(s||1)), uv=g.attributes.uv;
+    const u0=(i%4)/4, v0=1-(Math.floor(i/4)+1)/2;
+    for (let k=0;k<uv.count;k++) uv.setXY(k,u0+uv.getX(k)/4, v0+uv.getY(k)/2);
+    const m=new THREE.Mesh(g,pm); m.position.set(x,y,z); m.rotation.y=ry||0;
+    m.rotation.z=fxRnd(-.03,.03); m.receiveShadow=true; add(m); };
+  // 藥局後牆整面被藥架擋住：管制藥品的告示貼在管制櫃門上，五對貼在調劑檯正面
+  poster(4,BENCH[0]+2.6,1.25,BENCH[1]-1.59,0,.8);
+  poster(0,BENCH[0]-1.2,.52,BENCH[1]+.76,0,.72);
+  poster(1,-1.0,1.6,-9.43);   poster(5,1.3,1.75,-9.43);               // 檢傷
+  poster(6,-12.75,1.7,-9.43);  poster(7,-8.68,1.75,-9.43,0,1.25);     // 行政區：白板兩側
+  poster(2,-13.23,1.7,-4.6,Math.PI/2,1.15);                           // 庫備品區旁
+  poster(3,-13.23,1.7,-0.3,Math.PI/2);                                // 發電機旁
+  poster(1,13.23,1.6,1.6,-Math.PI/2); poster(5,13.23,1.75,-2.6,-Math.PI/2);
+  poster(2,4.2,1.7,6.43,Math.PI,1.15);
+}
 function init3D(){
   const canvas=$('scene');
   const small=MOBILE();
@@ -567,9 +675,9 @@ function init3D(){
   cam=new THREE.PerspectiveCamera(46,1,0.1,200);
 
   // 地面：所有地坪共用一張水泥紋理，UV 依實際尺寸放大，紋理密度一致
-  const conc=concreteTex();
+  const conc=concreteTex(), crough=roughTex();
   const floor=new THREE.Mesh(worldUV(new THREE.PlaneGeometry(64,54),64,54,4),
-    new THREE.MeshStandardMaterial({color:0x0e1214,roughness:.78,metalness:.08,map:conc}));
+    new THREE.MeshStandardMaterial({color:0x0e1214,roughness:1,metalness:.08,map:conc,roughnessMap:crough}));
   floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
 
   const outl={pharm:[],other:[]};
@@ -577,7 +685,7 @@ function init3D(){
     const w=z.b[0]-z.a[0], h=z.b[1]-z.a[1];
     const k='zone'+z.c;
     const m=new THREE.Mesh(worldUV(new THREE.PlaneGeometry(w-.3,h-.3),w-.3,h-.3,4),
-      MC[k]||(MC[k]=new THREE.MeshStandardMaterial({color:z.c,roughness:.9,map:conc})));
+      MC[k]||(MC[k]=new THREE.MeshStandardMaterial({color:z.c,roughness:1,metalness:.06,map:conc,roughnessMap:crough})));
     m.rotation.x=-Math.PI/2; m.position.set(z.a[0]+w/2,.012,z.a[1]+h/2);
     m.receiveShadow=true; scene.add(m); M.zones.push(m);
     const x0=z.a[0]+.15,x1=z.b[0]-.15,z0=z.a[1]+.15,z1=z.b[1]-.15;
@@ -785,6 +893,7 @@ function init3D(){
     return g; });
 
   dressStation(small);
+  dressWalls(small);
 
   // 燈光
   /* 原本是一盞平的環境光（0.58），所有東西四面一樣亮，人看起來是剪紙。
@@ -1229,6 +1338,9 @@ function render3D(dt){
     const mk=new THREE.Mesh(new THREE.PlaneGeometry(.62,.26),
       new THREE.MeshBasicMaterial({map:textTex('領　藥','#1a1206','#f0b95c'),transparent:true,depthTest:false}));
     mk.position.y=2.02; g.add(mk); g.userData.mk=mk;
+    const L=g.userData.limbs;                          // 藥袋：掛在右手上，領到藥之後才出現
+    if (L){ const bag=new THREE.Mesh(geo('bag',()=>new THREE.BoxGeometry(.16,.22,.07)), stdMat(0xe8e4d8,.8));
+      bag.position.set(0,-.74,.02); bag.castShadow=true; bag.visible=false; L.a2.add(bag); g.userData.bag=bag; }
     M.pk.push(g);
   }
   M.pk.forEach((g,i)=>{
@@ -1249,19 +1361,40 @@ function render3D(dt){
   // 處方籃高度＝佇列
   const q=Math.min(10,nPending);
   M.baskets.forEach((b,i)=>b.visible=i<q);
-  // 相機
-  const cs=Math.cos(player.yaw), sn=Math.sin(player.yaw);
-  const dist=player.wide?16.5:8.5, ht=player.wide?13.5:5.5, look=player.wide?4.5:2.3;
+  /* 相機：不再死黏在人身上。跟隨點、繞行角度、遠近三個量各自平滑追上，
+     所以轉視角是繞著人轉一圈（不是穿過中間），按 V 拉遠拉近有過場。 */
+  const C=M.camS||(M.camS={x:player.pos[0],z:player.pos[1],yaw:player.yaw,zoom:player.wide?1:0});
+  const ease=r=>1-Math.exp(-dt*r);
+  C.x+=(player.pos[0]-C.x)*ease(9); C.z+=(player.pos[1]-C.z)*ease(9);
+  let dyaw=player.yaw-C.yaw; dyaw=Math.atan2(Math.sin(dyaw),Math.cos(dyaw));
+  C.yaw+=dyaw*ease(7);
+  C.zoom+=((player.wide?1:0)-C.zoom)*ease(4.5);
+  const zz=C.zoom*C.zoom*(3-2*C.zoom), mix=(a,b)=>a+(b-a)*zz;
+  const cs=Math.cos(C.yaw), sn=Math.sin(C.yaw);
+  const dist=mix(8.5,16.5), ht=mix(5.5,13.5), look=mix(2.3,4.5);
   let sx=0,sy=0;
   if (shake>0){ shake=Math.max(0,shake-dt*1.5); sx=fxRnd(-.25,.25)*shake; sy=fxRnd(-.2,.2)*shake; }
-  cam.position.set(player.pos[0]-sn*dist+sx, ht+sy, player.pos[1]-cs*dist);
-  cam.lookAt(player.pos[0]+sn*look, player.wide?.6:1.1, player.pos[1]+cs*look);
+  cam.position.set(C.x-sn*dist+sx, ht+sy, C.z-cs*dist);
+  cam.lookAt(C.x+sn*look, mix(1.1,.6), C.z+cs*look);
   fadeOccluders(dt);
   // 走路的擺動：玩家、隊員、幫手、來領藥的人、巡邏的維安
   gait(M.player,dt);
   M.npcs.forEach(n=>gait(n.g,dt));
   M.helperNpcs.forEach(g=>{ if (g.visible) gait(g,dt); });
   M.pk.forEach(g=>{ if (g.visible) gait(g,dt); });
+  /* 手上在做事：藥師在調劑檯前作業、幫手站定在工作位置時，兩手在檯面上動（數藥、分包、寫標籤） */
+  const work=(g,on,ph)=>{ const L=g.userData.limbs; if (!L) return;
+    L.w=(L.w||0)+((on?1:0)-(L.w||0))*Math.min(1,dt*5);
+    if (L.w<.01) return;
+    const t=now/1000+ph;
+    L.a1.rotation.x += (-.95+Math.sin(t*5.2)*.14 - L.a1.rotation.x)*L.w;
+    L.a2.rotation.x += (-1.05+Math.sin(t*4.1+1.3)*.16 - L.a2.rotation.x)*L.w;
+    L.a1.rotation.z += (.22-L.a1.rotation.z)*L.w*.5; L.a2.rotation.z += (-.22-L.a2.rotation.z)*L.w*.5; };
+  work(M.player, !!(S.task && !S.task.walk && S.atBench) && M.player.userData.limbs.amt<.2, 0);
+  M.helperNpcs.forEach((g,i)=>{ const r=S.helpers[i]; if (!g.visible||!r) return;
+    const at=helperSpot(r); work(g, !!(r.job||r.chore) && Math.hypot(at[0]-g.position.x,at[1]-g.position.z)<.15, i*1.7); });
+  // 領到藥的人拎著白色藥袋走
+  M.pk.forEach((g,i)=>{ const k=S.pickups[i]; if (g.userData.bag) g.userData.bag.visible=!!k && k.kind==='take' && k.phase==='leave'; });
   M.sec.forEach(g=>{ if (g.visible) gait(g,dt); });
   // 讀數與燈
   if (!M.lastP || now-M.lastP>420){ M.lastP=now; drawFridge(); }

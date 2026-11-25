@@ -130,7 +130,7 @@ function runNight(mode, wake, nh){
   // 疲勞
   let fatigue;
   if (mode==='awake'){ fatigue=Math.min(100,S.fatigue+42);
-    push('06:00','天亮','mid','你一夜沒睡。所有事都經過你，所以幾乎沒有出錯——但你現在的判斷力比昨天差得多，而第五天的白班還是只有你一個藥師。');
+    push('06:00','天亮','mid',`你一夜沒睡。所有事都經過你，所以幾乎沒有出錯——但你現在的判斷力比昨天差得多，而${dayName(DAY+1)}的白班還是只有你一個藥師。`);
     mark('P8', false, '整夜未休息，違反人員輪替原則，隔日作業風險升高'); }
   else if (mode==='split'){ fatigue=Math.max(0,S.fatigue-18);
     push('06:00','天亮','ok',`你睡了大約四個小時，被叫醒 ${ev.filter(e=>e.ok==='ok').length} 次。這是這幾天最接近正常的一晚。`);

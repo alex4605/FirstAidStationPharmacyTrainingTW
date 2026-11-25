@@ -110,6 +110,73 @@ function concreteTex(){
 }
 function mulberry(a){ return ()=>{ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+/** 方塊六個面各自依實際尺寸放大 UV（BoxGeometry 的面順序：±x、±y、±z，每面四個頂點） */
+function boxWorldUV(g,w,h,d,scale){
+  const uv=g.attributes.uv, F=[[d,h],[d,h],[w,d],[w,d],[w,h],[w,h]];
+  for (let f=0;f<6;f++) for (let i=0;i<4;i++){ const k=f*4+i;
+    uv.setXY(k,uv.getX(k)*F[f][0]/scale,uv.getY(k)*F[f][1]/scale); }
+  uv.needsUpdate=true; return g;
+}
+/* 停車場的柱子：水泥底色，最下面一公尺漆黃黑斜紋，上緣一條白線——
+   B2 停車場每根柱子都長這樣。貼圖高度對應整根柱子（3.4 公尺）。 */
+function pillarTex(){
+  const W=128,H=512,c=document.createElement('canvas'); c.width=W; c.height=H;
+  const g=c.getContext('2d'), rr=mulberry(0xb2);
+  g.fillStyle='#1c2427'; g.fillRect(0,0,W,H);
+  for (let i=0;i<2600;i++){ const v=rr(); g.fillStyle=v<.5?'rgba(0,0,0,.18)':'rgba(120,140,140,.06)';
+    g.fillRect(rr()*W,rr()*H,1+rr()*2,1+rr()*2); }
+  const band=Math.round(H*0.27), y0=H-band;          // 約 0.9 公尺
+  g.save(); g.beginPath(); g.rect(0,y0,W,band); g.clip();
+  g.fillStyle='#16191a'; g.fillRect(0,y0,W,band);
+  g.fillStyle='#8c7a2a';
+  for (let x=-band;x<W+band;x+=44){ g.beginPath(); g.moveTo(x,H); g.lineTo(x+22,H); g.lineTo(x+22+band,y0); g.lineTo(x+band,y0); g.fill(); }
+  g.fillStyle='rgba(0,0,0,.35)';                          // 被鞋子、推車磨掉的地方
+  for (let i=0;i<900;i++) g.fillRect(rr()*W,H-rr()*rr()*band,1+rr()*3,1);
+  g.restore();
+  g.fillStyle='#5d6866'; g.fillRect(0,y0-10,W,5);
+  const t=new THREE.CanvasTexture(c);
+  t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+/* 假的環境光遮蔽：牆腳與重物底下一圈漸層的暗。真的 SSAO 要多一整個後製 pass，
+   這個只是幾片地貼，合併後一兩次 draw call。 */
+let AOM=null;
+function aoMats(){
+  if (AOM) return AOM;
+  const mk=(w,h,paint)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h;
+    paint(c.getContext('2d')); return new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),
+      transparent:true,depthWrite:false,color:0x000000}); };
+  AOM={
+    strip: mk(4,64,g=>{ const gr=g.createLinearGradient(0,0,0,64);
+      gr.addColorStop(0,'#bfbfbf'); gr.addColorStop(.35,'#474747'); gr.addColorStop(1,'#000');
+      g.fillStyle=gr; g.fillRect(0,0,4,64); }),
+    pad: mk(64,64,g=>{ const gr=g.createRadialGradient(32,32,4,32,32,32);
+      gr.addColorStop(0,'#c8c8c8'); gr.addColorStop(.6,'#5a5a5a'); gr.addColorStop(1,'#000');
+      g.fillStyle=gr; g.fillRect(0,0,64,64); }),
+  };
+  // 灰階當遮蔽量（alphaMap 讀的是綠色通道，不是 alpha）：顏色固定黑，貼圖只提供透明度
+  Object.values(AOM).forEach(m=>{ m.alphaMap=m.map; m.map=null; });
+  return AOM;
+}
+/** 地上的一片遮蔽：x,z 中心，w×d，ry 旋轉，kind = 'pad'（四周淡出）或 'strip'（從一邊淡出） */
+function aoDecal(x,z,w,d,ry,kind){
+  const m=new THREE.Mesh(geo('aoP',()=>new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2)), aoMats()[kind||'pad']);
+  m.scale.set(w,1,d); m.position.set(x,.029,z); if (ry) m.rotation.y=ry; m.renderOrder=1;
+  scene.add(m); return m;
+}
+/* 假光暈：發光的東西旁邊一張加法混合的貼片。沒有後製 bloom 的條件下，
+   這是讓「那是一盞燈」看起來像燈最便宜的方法。 */
+let GLOWT=null;
+function glowSprite(col,size,op){
+  if (!GLOWT){ const c=document.createElement('canvas'); c.width=c.height=64;
+    const g=c.getContext('2d'), gr=g.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.18,'rgba(255,255,255,.55)');
+    gr.addColorStop(.5,'rgba(255,255,255,.12)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,64,64); GLOWT=new THREE.CanvasTexture(c); }
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOWT,color:col,transparent:true,opacity:op,
+    blending:THREE.AdditiveBlending,depthWrite:false}));
+  sp.scale.set(size,size,1); sp.userData.op=op; scene.add(sp); return sp;
+}
 /** 把平面的 UV 依實際尺寸放大，所有地面共用一張貼圖時紋理密度一致 */
 function worldUV(g,w,h,scale){
   const uv=g.attributes.uv; for (let i=0;i<uv.count;i++) uv.setXY(i,uv.getX(i)*w/scale,uv.getY(i)*h/scale);
@@ -362,6 +429,7 @@ function dressStation(small){
     [[-1.35,.78],[1.35,.78],[-1.35,-.78],[1.35,-.78]].forEach(([x,z])=>{
       const w=cyl(.32,.22,0x14181a,10,.9); w.rotation.x=Math.PI/2; car.add(add(w,x,.32,z)); });
     car.position.set(-11.4,0,5.0); car.rotation.y=.18; scene.add(car);
+    aoDecal(-11.4,5.0,5.0,2.9,.18);
     add(flat(4.4,2.2,0x0e1113,.5), -11.4,.02,5.0);
   }
   // 機車停車區與兩台機車（手機省略）
@@ -496,19 +564,29 @@ function init3D(){
     new THREE.BufferGeometry().setFromPoints(outl[k]), new THREE.LineBasicMaterial({color:c}))));
   /* 會擋住鏡頭的東西（柱子、外牆、架子背板）：各自一份材質，擋到你的時候變淡。 */
   M.occ=[];
+  let PT=null;
   const occ=m=>{ m.material.transparent=false; m.userData.fade=1; M.occ.push(m); return m; };
-  const wall=(x,z,w,d,h,c)=>{const m=occ(box(w,h,d,c||0x161d20,{rough:1,own:true})); m.position.set(x,h/2,z); scene.add(m);};
+  const wall=(x,z,w,d,h,c)=>{const m=occ(box(w,h,d,c||0x161d20,{rough:1,own:true}));
+    m.geometry=boxWorldUV(m.geometry.clone(),w,h,d,4); m.material.map=conc;
+    m.position.set(x,h/2,z); scene.add(m);};
   wall(0,-9.7,27,.5,3.4); wall(0,6.7,27,.5,3.4);
   wall(-13.5,-1.5,.5,17,3.4); wall(13.5,-1.5,.5,17,3.4);
   const lint=occ(box(8,.7,.6,0x1e262a,{own:true})); lint.position.set(5,3.05,-9.7); scene.add(lint);
   const ramp=box(8,.3,6,0x11161a,{rough:1}); ramp.position.set(5,-.1,-12.4); ramp.rotation.x=-.09; scene.add(ramp);
   // 十根柱子：鏡頭在人後面，柱子常常剛好擋在中間——每根各自能變淡
   [[-9.5,-1.5],[-9.5,3.5],[-4.5,-1.5],[-4.5,3.5],[1,-1.5],[1,3.5],[7,-1.5],[7,3.5],[11.4,-1.5],[11.4,3.5]]
-    .forEach(([x,z])=>{ const m=occ(box(.8,3.4,.8,0x1c2427,{rough:.92,own:true})); m.position.set(x,1.7,z); scene.add(m); });
+    .forEach(([x,z])=>{ const m=occ(box(.8,3.4,.8,0xffffff,{rough:.92,own:true}));
+      m.material.map=PT||(PT=pillarTex()); m.position.set(x,1.7,z); scene.add(m);
+      aoDecal(x,z,2.0,2.0); });
+  // 牆腳的暗：四面牆內側各一條
+  aoDecal(0,-9.0,26.5,.9,0,'strip'); aoDecal(0,6.0,26.5,.9,Math.PI,'strip');
+  aoDecal(-12.8,-1.5,16.5,.9,Math.PI/2,'strip'); aoDecal(12.8,-1.5,16.5,.9,-Math.PI/2,'strip');
 
   // 藥局
   const bench=box(4.4,.9,1.5,0x3a3226,{rough:.55,metal:.15});
   bench.position.set(BENCH[0],.45,BENCH[1]); scene.add(bench);
+  aoDecal(BENCH[0],BENCH[1],5.4,2.4);
+  aoDecal(BENCH[0]-.2,BENCH[1]-1.95,5.6,1.2);           // 藥品架靠牆那一排
   const top=new THREE.Mesh(new THREE.BoxGeometry(4.5,.07,1.6),
     new THREE.MeshStandardMaterial({color:0xd8cbaa,roughness:.3,emissive:0x4a3a1c,emissiveIntensity:.55}));
   top.position.set(BENCH[0],.93,BENCH[1]); top.castShadow=true; scene.add(top); M.bench=top;
@@ -550,6 +628,7 @@ function init3D(){
   const sb=occ(box(4.9,2.5,.14,0x1a2124,{own:true})); sb.position.set(BENCH[0]-.2,1.25,BENCH[1]-2.16); scene.add(sb);
   const cab=box(1.0,1.7,.6,0x2a2226,{rough:.65,metal:.2});
   cab.position.set(BENCH[0]+2.6,.85,BENCH[1]-1.9); scene.add(cab);
+  aoDecal(BENCH[0]+2.6,BENCH[1]-1.9,1.6,1.2);
   const lock=new THREE.Mesh(new THREE.SphereGeometry(.07,10,8),
     new THREE.MeshStandardMaterial({color:0xb8586b,emissive:0xb8586b,emissiveIntensity:1.3}));
   lock.position.set(BENCH[0]+2.6,1.05,BENCH[1]-1.58); scene.add(lock); M.lock=lock;
@@ -579,6 +658,7 @@ function init3D(){
   // 庫備品區：冰箱
   const fr=box(1.2,2.0,1.0,0x2b3437,{rough:.4,metal:.35});
   fr.position.set(FRIDGE[0],1.0,FRIDGE[1]); scene.add(fr);
+  aoDecal(FRIDGE[0],FRIDGE[1],1.9,1.7);
   const fc=document.createElement('canvas'); fc.width=256; fc.height=128;
   M.fctx=fc.getContext('2d'); M.ftex=new THREE.CanvasTexture(fc);
   const fp=new THREE.Mesh(new THREE.PlaneGeometry(.78,.42),
@@ -589,6 +669,7 @@ function init3D(){
   for (let i=0;i<3;i++){const r=box(2.2,.09,.6,0x263033); r.position.set(-10.2,.6+i*.7,-7.6); scene.add(r);}
   // 發電機
   const gen=box(1.7,1.25,1.1,0x33302a,{rough:.9}); gen.position.set(-12.0,.62,-2.4); scene.add(gen);
+  aoDecal(-12.0,-2.4,2.5,1.9);
   M.genLed=new THREE.Mesh(new THREE.SphereGeometry(.06,8,6),
     new THREE.MeshStandardMaterial({color:0x4f9268,emissive:0x4f9268,emissiveIntensity:2}));
   M.genLed.position.set(-12.0,1.32,-1.85); scene.add(M.genLed);
@@ -600,6 +681,7 @@ function init3D(){
   for (let i=0;i<10;i++){
     const bx=6.3+(i%5)*1.6, bz=-2.4+Math.floor(i/5)*4.6;
     const b=box(.82,.36,2.0,0x232e31,{rough:.8}); b.position.set(bx,.18,bz); scene.add(b);
+    aoDecal(bx,bz,1.35,2.6);
     if (i<7){ const pp=person([0xb0453c,0xc09a3e,0x4a8a62][i%3],true,{skin:SKIN[i%SKIN.length],trouser:0x39423f});
       pp.position.set(bx,.36,bz); pp.rotation.y=Math.PI/2; scene.add(pp); }
     const iv=box(.05,1.5,.05,0x39454a); iv.position.set(bx+.6,.75,bz-.7); scene.add(iv);
@@ -682,14 +764,14 @@ function init3D(){
   scene.add(new THREE.HemisphereLight(0x5f7c86,0x14110d,.50));
   const rim=new THREE.DirectionalLight(0x5f7f88,.22); rim.position.set(-10,6,10); scene.add(rim);
   const key=new THREE.DirectionalLight(0x93a8ad,.30); key.position.set(6,18,2);
-  key.castShadow=true; key.shadow.mapSize.set(small?512:768,small?512:768); key.shadow.bias=-0.0006;
+  key.castShadow=true; key.shadow.mapSize.set(small?512:1024,small?512:1024); key.shadow.bias=-0.0006;
   key.shadow.camera.left=-18; key.shadow.camera.right=18;
   key.shadow.camera.top=16; key.shadow.camera.bottom=-16; key.shadow.camera.far=44;
   scene.add(key);
   M.work=new THREE.SpotLight(0xffd9a0,2.6,13,Math.PI/4.4,.55,1.6);
   M.work.position.set(BENCH[0],3.15,BENCH[1]+.2);
   M.work.target.position.set(BENCH[0],.9,BENCH[1]);
-  M.work.castShadow=true; M.work.shadow.mapSize.set(small?256:512,small?256:512); M.work.shadow.bias=-0.001;
+  M.work.castShadow=true; M.work.shadow.mapSize.set(small?256:1024,small?256:1024); M.work.shadow.radius=3; M.work.shadow.bias=-0.001;
   scene.add(M.work); scene.add(M.work.target);
   const shade=box(1.0,.12,.7,0x30281c); shade.position.set(BENCH[0],3.2,BENCH[1]+.2); scene.add(shade);
   // 看得見的光錐：整個地下室裡，只有這一塊是亮的
@@ -751,12 +833,44 @@ function init3D(){
     const l=new THREE.PointLight(0x8fb0b8,i*1.45,9.5,1.7); l.position.set(x,3.0,z);
     l.userData.base=i*1.45; scene.add(l); M.lights.push(l);
   });
+  /* 廢棄物區那一支日光燈管快壞了：大部分時間正常，偶爾閃兩下。
+     發電機油快見底時（20 公升以下）全站的燈都跟著不穩。 */
+  M.flick=M.lights[M.lights.length-1]; M.flick.userData.next=4;
   // 粉塵
   const dg=new THREE.BufferGeometry(); const N=260, a=new Float32Array(N*3);
   for (let i=0;i<N;i++){a[i*3]=fxRnd(-14,14); a[i*3+1]=fxRnd(.2,3.2); a[i*3+2]=fxRnd(-11,7);}
   dg.setAttribute('position',new THREE.BufferAttribute(a,3));
-  dust=new THREE.Points(dg,new THREE.PointsMaterial({color:0xc8b48a,size:.035,transparent:true,opacity:.30}));
+  // 粉塵改成柔邊的圓點（原本是方塊），近大遠小
+  const softDot=(()=>{ const c=document.createElement('canvas'); c.width=c.height=32;
+    const g=c.getContext('2d'), gr=g.createRadialGradient(16,16,0,16,16,16);
+    gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.4,'rgba(255,255,255,.5)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,32,32); return new THREE.CanvasTexture(c); })();
+  dust=new THREE.Points(dg,new THREE.PointsMaterial({color:0xc8b48a,size:.06,map:softDot,transparent:true,
+    opacity:.32,depthWrite:false}));
   scene.add(dust);
+  /* 工作燈光錐裡飄的灰：只有那一塊看得到，暖色、加法混合，緩緩轉 */
+  {
+    const n=small?40:90, mg=new THREE.BufferGeometry(), ma=new Float32Array(n*3);
+    for (let i=0;i<n;i++){ const y=fxRnd(.95,3.0), r=Math.sqrt(Math.random())*(.15+(3.1-y)*.62), t=fxRnd(0,6.283);
+      ma[i*3]=Math.cos(t)*r; ma[i*3+1]=y; ma[i*3+2]=Math.sin(t)*r; }
+    mg.setAttribute('position',new THREE.BufferAttribute(ma,3));
+    M.motes=new THREE.Points(mg,new THREE.PointsMaterial({color:0xffd9a0,size:.045,map:softDot,transparent:true,
+      opacity:.55,depthWrite:false,blending:THREE.AdditiveBlending}));
+    M.motes.position.set(BENCH[0],0,BENCH[1]+.2); scene.add(M.motes);
+  }
+  // 光暈：工作燈、窗口的燈、冷藏庫面板、管制櫃的鎖、發電機燈號
+  M.glows={
+    work: glowSprite(0xffd9a0,1.5,.55),
+    win:  glowSprite(0xffc98a,1.1,.35),
+    fr:   glowSprite(0x4fa8b8,1.3,.40),
+    lock: glowSprite(0xb8586b,.45,.55),
+    gen:  glowSprite(0x4f9268,.4,.6),
+  };
+  M.glows.work.position.set(BENCH[0],3.06,BENCH[1]+.2);
+  M.glows.win.position.set(-2.4,2.0,WINDOW[1]);
+  M.glows.fr.position.set(FRIDGE[0]+.66,1.45,FRIDGE[1]);
+  M.glows.lock.position.set(BENCH[0]+2.6,1.05,BENCH[1]-1.52);
+  M.glows.gen.position.set(-12.0,1.32,-1.8);
   // 打擊碎屑
   const bg=new THREE.BufferGeometry(); const B=170, ba=new Float32Array(B*3);
   for (let i=0;i<B;i++){ba[i*3]=fxRnd(-13,-7); ba[i*3+1]=fxRnd(0,3); ba[i*3+2]=fxRnd(-5,1);}
@@ -789,11 +903,12 @@ function init3D(){
 function optimizeStatic(){
   const keep=new Set(), dyn=new Set();
   const K=o=>{ if (o && o.isObject3D) keep.add(o); };
-  [M.player,M.consult,M.bench,M.lock,M.genLed,M.pool,M.cone,M.work,M.winLight,M.fglow,dust,debrisPts]
+  [M.player,M.consult,M.bench,M.lock,M.genLed,M.pool,M.cone,M.work,M.winLight,M.fglow,dust,debrisPts,M.motes]
     .forEach(K);
+  Object.values(M.glows||{}).forEach(K);
   [M.baskets,M.labels,M.occ,M.sec,M.lights].forEach(a=>(a||[]).forEach(K));
   M.npcs.forEach(n=>K(n.g));
-  [M.player,M.consult,dust,...M.sec,...M.npcs.map(n=>n.g)].forEach(o=>dyn.add(o));
+  [M.player,M.consult,dust,M.motes,...M.sec,...M.npcs.map(n=>n.g)].forEach(o=>dyn.add(o));
   scene.updateMatrixWorld(true);
   /* 分組：沒有貼圖的實心材質不看顏色、只看質感（粗糙度與金屬度取到 0.05），
      顏色烘進頂點色，十幾種深灰色的箱子、桌腳、椅子就能併成同一個網格。
@@ -1064,7 +1179,27 @@ function render3D(dt){
   M.bench.material.emissiveIntensity=S.genOn?.55:.18;
   if (M.pool) M.pool.material.opacity=S.genOn?.075+Math.sin(now/900)*.006:.022;
   if (M.winLight) M.winLight.intensity=S.genOn?(S.pickups.some(k=>k.phase==='wait')?1.35:.85):.2;
-  M.lights.forEach(l=>l.intensity=S.genOn?l.userData.base:.16);
+  // 燈：油快沒了全站不穩；廢棄物區那支燈管自己會閃
+  const lowFuel = S.genOn && S.fuel<20;
+  const wob = lowFuel ? (.82+Math.sin(now/97)*.08+Math.sin(now/41)*.06+(Math.random()<.02?-.4:0)) : 1;
+  M.lights.forEach(l=>l.intensity=S.genOn?l.userData.base*wob:.16);
+  if (S.genOn && M.flick){
+    const f=M.flick.userData; f.next-=dt;
+    if (f.next<=0){ f.burst=fxRnd(.25,.9); f.next=fxRnd(6,22); }
+    if (f.burst>0){ f.burst-=dt; M.flick.intensity*= Math.random()<.5 ? .08 : .7; }
+  }
+  // 光暈跟著燈的狀態走
+  if (M.glows){
+    const G=M.glows, on=S.genOn?1:.25;
+    G.work.material.opacity=G.work.userData.op*on*(M.work.intensity/2.6);
+    G.win.material.opacity=G.win.userData.op*(M.winLight.intensity/.85);
+    G.fr.material.color.setHex(hot?0xd9873a:0x4fa8b8);
+    G.fr.material.opacity=G.fr.userData.op*(M.fglow.intensity/.7);
+    G.lock.material.opacity=G.lock.userData.op*(M.lock.material.emissiveIntensity/1.3);
+    G.gen.material.color.setHex(S.genOn?0x4f9268:0x5a3030);
+    G.gen.material.opacity=S.genOn?G.gen.userData.op:.25;
+  }
+  if (M.motes){ M.motes.rotation.y+=dt*.05; M.motes.material.opacity=S.genOn?.55:.12; }
   M.lock.material.emissiveIntensity=1.0+Math.sin(now/700)*.35;
   if (dust) dust.rotation.y+=dt*0.012;
   if (debris>(M.lastDebris||0)+.01){           // 新的一次打擊：碎屑回到上方重新落下
@@ -1083,5 +1218,9 @@ function render3D(dt){
   // 陰影貼圖：畫質等級決定隔幾幀更新一次（場景靜態，只有人在動）
   M.frame=(M.frame||0)+1;
   if (renderer.shadowMap.enabled && M.frame%(perf.shadowEvery||1)===0) renderer.shadowMap.needsUpdate=true;
+  // 累了，視野邊緣跟著暗下來（55 以上開始，分 10 段，變了才寫 CSS）
+  const fb=Math.max(0,Math.min(10,Math.round((S.fatigue-45)/5.5)));
+  if (fb!==M.fatB){ M.fatB=fb; const st=$('stage').style;
+    st.setProperty('--vin',(36-fb*1.6)+'%'); st.setProperty('--vo',(.74+fb*.016).toFixed(3)); }
   renderer.render(scene,cam);
 }

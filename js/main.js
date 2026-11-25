@@ -202,8 +202,10 @@ function bind(){
 }
 function start(){
   layoutClass();
-  // 第四天了，耗材不是只有藥會少。哪幾樣短缺由種子決定
-  ['sharp','label','oral','book'].forEach(k=>{ if (chance(.34)) S.sup[k]=false; });
+  // 第四天了，耗材不是只有藥會少。哪幾樣短缺由種子決定；接續的日子則帶著昨天的狀態開站
+  const carried = applyCarry();
+  if (!carried) ['sharp','label','oral','book'].forEach(k=>{ if (chance(.34)) S.sup[k]=false; });
+  $('dayname').textContent = dayName(DAY);
   // 沒有 WebGL（舊裝置、省電模式、three.js 沒載到）時，站內平面圖看不到，但值班照常進行
   try { init3D(); }
   catch(e){
@@ -214,6 +216,7 @@ function start(){
   }
   bind(); syncSpeed();
   log('急救站設置參考指引（114 年衛部醫字第 1141669299 號）第一類急救站。');
+  morningAfter();
   Object.keys(SUP_SHORT).forEach(k=>{ if (!S.sup[k]) log('※ '+SUP_SHORT[k],'l-warn'); });
   renderTop(); renderQueue(); renderHelpers(); renderShelf(); renderDetail(); renderLog();
   requestAnimationFrame(loop);

@@ -60,7 +60,8 @@ function step(dt){
     S.pending.splice(i,1);
     if (c.follow){ pushJob({...FOLLOWUP[c.follow], t:S.t}); log('先前的諮詢回覆帶回了一張處方。','l-warn'); continue; }
     if (c.steal){ doTheft(c.steal); continue; }
-    if (c.fu){ spawnFollowUp(c.fu); continue; }      // 給錯的藥，從別人的嘴裡回來
+    if (c.fu){ spawnFollowUp(c.fu); continue; }
+    if (c.wq){ spawnWindowQ(c.wq); continue; }      // 給錯的藥，從別人的嘴裡回來
     if (c.idn){ pushJob({kind:'idn', t:S.t, ...c.idn}); continue; }
     if (c.raidLoss){                      // 警報時沒鎖的那個櫃子
       const t=DRUGS.filter(d=>d.st==='ctrl'&&d.have>0);
@@ -89,7 +90,7 @@ function step(dt){
     dirty.detail=true; }
   if (S.genOn && S.fuel>0){ S.fuel=Math.max(0,S.fuel-dt*0.052);
     if (S.fuel<=0){ S.genOn=false; log('※ 發電機油用罄。','l-bad'); } }
-  S.fatigue = Math.min(100,S.fatigue+dt*0.03);
+  S.fatigue = Math.min(100,S.fatigue+dt*0.065);    // 一整個白班不休息，下午就會累到要自己核對
   tickBg(dt); tickHelperWork(dt); tickChatter(dt); tickPatrol(dt);
   tickCold(dt); tickThreat(dt); tickRounds();
   for (const j of pending()){

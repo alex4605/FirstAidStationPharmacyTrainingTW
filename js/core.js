@@ -2,7 +2,7 @@
 /* 還開著 STILL OPEN — 亂數種子、共用小工具與場地分區 */
 
 /* =========================================================================
-   還開著 STILL OPEN — v1.10「藥師視角（EMT-2）」
+   還開著 STILL OPEN — v1.11「藥師視角（EMT-2）」
    空間、人員配置、藥品品項與七日儲備量取自衛福部 114 年
    「急救站設置參考指引」本文與附件四、附件五、附件六；
    冷鏈與 72 小時自主維生取自「地下空間作為替代醫療場所運作指引」。
@@ -18,11 +18,16 @@ const SEED = (()=>{
   try { history.replaceState(null,'','#seed='+s); } catch(e){ /* 無法改寫網址時略過；本場種子仍然有效，只是不能分享連結 */ }
   return s;
 })();
+/* 第幾天。白班結束後可以「接續下一天」：網址會帶 day=5，前一天的結果從瀏覽器暫存讀回來。
+   每一天的亂數另外派生，所以第五天的班表、幫手與事件跟第四天不一樣。 */
+const DAY = (()=>{ const m=/day=(\d{1,2})/.exec(location.hash||''); const d=m?+m[1]:4; return d>=4&&d<=30?d:4; })();
+const RUNKEY = SEED + (DAY>4 ? '/D'+DAY : '');
+const dayName = n => (['','','','','第四天','第五天','第六天','第七天','第八天','第九天','第十天'][n]) || `第 ${n} 天`;
 // 改了網址上的種子就重開一場
 addEventListener('hashchange',()=>{ if (!/seed=/.test(location.hash) || !location.hash.includes(SEED)) location.reload(); });
 const rng = (()=>{                       // mulberry32
-  let h=1779033703^SEED.length;
-  for (let i=0;i<SEED.length;i++){ h=Math.imul(h^SEED.charCodeAt(i),3432918353); h=h<<13|h>>>19; }
+  let h=1779033703^RUNKEY.length;
+  for (let i=0;i<RUNKEY.length;i++){ h=Math.imul(h^RUNKEY.charCodeAt(i),3432918353); h=h<<13|h>>>19; }
   let a=(h^h>>>16)>>>0;
   return ()=>{ a|=0; a=a+0x6D2B79F5|0;
     let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t;
@@ -48,7 +53,7 @@ const sample = (arr,n)=>shuffle(arr).slice(0,n);
    不動主亂數（主亂數的抽取順序會隨玩家操作而變），所以同一個種子、同一題，順序永遠一樣。 */
 function keyedShuffle(arr, key){
   let h=2166136261;
-  const s=SEED+'|'+key;
+  const s=RUNKEY+'|'+key;
   for (let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
   const r=()=>{ h=Math.imul(h^h>>>15,2246822507); h=Math.imul(h^h>>>13,3266489909); h^=h>>>16; return (h>>>0)/4294967296; };
   const a=arr.slice();

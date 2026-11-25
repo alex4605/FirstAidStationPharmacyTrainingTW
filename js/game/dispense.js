@@ -51,6 +51,8 @@ function pushJob(spec){
     log(`※※ ${j.title}　—　人還在除污區外面。`, 'l-bad');
   } else if (j.kind==='walk'){
     log(j.sub==='bed' ? `${j.who}：「藥師，#${String(j.src.n).padStart(2,'0')} 我要給了，你過來一起核對一下？」` : '該記錄冷藏溫度了（冷藏庫前的紀錄表）。', 'l-key');
+  } else if (j.kind==='wq'){
+    log(`${j.who} 在窗口多問了一句。`, 'l-con');
   } else if (j.kind==='fu'){
     log(`※ ${j.who} 回來找你：#${String(j.src.n).padStart(2,'0')} ${j.src.pat.nm} 的事。`, 'l-bad');
   } else if (j.kind==='help'){
@@ -146,6 +148,7 @@ function dispTime(j){
   if (j.ctrl) m += 2;
   if (j.cold) m += 1.5;
   if (S.fatigue>60) m *= 1.25;
+  if (justServed(j.pat)) m = Math.max(1, m-1);   // 同一個人剛配過一張：藥袋、標籤、交付一起
   const h = activeWith('dispense') || activeWith('pack');
   if (h) m *= h.briefed?0.62:0.78;   // 有人幫忙就快，但沒做過作業簡介的人幫得比較有限
   return m;
@@ -216,6 +219,9 @@ function doDispense(j, annotate, units){
     j.short = n;
     j.counting=false; j.counted=null; j.cnt=null; dirty.stock=dirty.detail=true; return;
   }
+  // 交付前的標籤核對（手寫或代貼的標籤）
+  if (!j.labelDone && labelApplies(j)){ j.labeling={annotate, units}; j.label=makeLabel(j, units);
+    dirty.detail=true; reveal('.f-label'); return; }
   if (j.ctrl && !j.ledger){ S.ctrlSkipped++;
     mark('P3',false,`#${j.n} ${j.drug.n} 未完成逐筆登記即取出`);
     log(`※ 管制藥品 ${j.drug.n} 未登記即取出。`,'l-bad'); }
@@ -274,6 +280,8 @@ function doDispense(j, annotate, units){
     if (j.ctrl && j.ledger){ S.ctrlLedger.push({t:clock(S.t),d:j.drug.n,p:j.pat.nm,dual:j.dual});
       mark('P3',true,`#${j.n} ${j.drug.n} 已逐筆登記${j.dual?'、雙人核對':'（無雙人核對）'}`); }
     if (needsBedside(j)) queueBedside(j);     // 高警訊藥品：要走到床邊再核對一次
+    if (j.labelBad) harm(j,'label');          // 標籤寫錯，病人照標籤吃
+    else maybeWindowQ(j);                     // 來拿藥的人多問一句
     dirty.q=dirty.stock=dirty.detail=true;
   });
 }

@@ -17,7 +17,7 @@ function openHandover(){
   const packHelper  = S.helpers.find(x=>x.active && x.scope.includes('pack'));
   openModal(`<h1>20:00</h1>
     <p class="kicker">依指引附表：夜班藥師編制 0 人 · 二班輪值 20:00–08:00</p>
-    <div class="note warn">你不會下班。外面的路在監視之下，你住的地方在三條街外，而且這是第四天。
+    <div class="note warn">你不會下班。外面的路在監視之下，你住的地方在三條街外，而且這是${dayName(DAY)}。
       <b>你今晚睡在這裡。</b>問題從「怎麼交班」變成「你要怎麼撐過今晚，還能有明天早上」。</div>
     ${q?`<div class="note">佇列還有 <b>${q} 項</b>未處理。</div>`:'<div class="note ok">佇列已清空。</div>'}
     <div class="note">目前疲勞 <b>${Math.round(S.fatigue)}／100</b>。
@@ -262,7 +262,7 @@ function endGame(){
     `<div class="note cold"><b>${d.t}　冷鏈處置</b><br>${d.choice}<br>${d.txt||'（未記錄理由）'}</div>`).join('');
 
   openModal(`<h1>行動後檢討 AAR</h1>
-    <p class="kicker">藥師（EMT-2）· 第四天白班 08:00–20:00 · 第一類急救站</p>
+    <p class="kicker">藥師（EMT-2）· ${dayName(DAY)}白班 08:00–20:00 · 第一類急救站</p>
     <div class="tblwrap"><table>
       <tr><th>處方</th><th>調劑</th><th>退回</th><th>正確攔截</th><th>過度阻擋</th><th>給藥事件</th><th>攔截率</th></tr>
       <tr><td>${rxs.length}</td><td>${S.dispensed}</td><td>${S.returned}</td><td>${S.blocked}</td>
@@ -296,7 +296,7 @@ function endGame(){
           <td style="color:${bd&&ct===bd?'var(--ok)':bd?'var(--bad)':'var(--ink-faint)'}">${bd?ct+'／'+bd:'—'}</td></tr>`;
       }).join('')}</table></div>
     <div class="note">今天 <b>${rxs.length}</b> 張處方裡有 <b>${rxs.filter(j=>j.flag).length}</b> 張帶著問題——
-      這不是「醫師很會開錯」，而是第四天的班表上，有幾個人正在做他平常不做的事。
+      這不是「醫師很會開錯」，而是${dayName(DAY)}的班表上，有幾個人正在做他平常不做的事。
       ${PRESCRIBERS.filter(d=>rxs.some(j=>j.by===d.n&&j.flag)).map(d=>
         `<br><br><b>${d.n}</b>（${d.sp}）：${d.tell}`).join('')}
       <br><br><span style="color:var(--ink-faint)">這一欄不是用來檢討醫師的。是用來說明一件事：
@@ -357,7 +357,8 @@ function endGame(){
     <h2>本場紀錄</h2>
     <div style="max-height:170px;overflow:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);background:#0e1214;padding:9px;border:1px solid var(--line)">
       ${S.log.map(l=>`${l.t}　${l.m}`).join('<br>')}</div>
-    <div class="btnrow"><button class="pbtn" id="again">再跑一場</button>
+    <div class="btnrow">${storeOK?`<button class="pbtn" id="nextday">接續${dayName(DAY+1)}</button>`:''}<button class="${storeOK?'gbtn':'pbtn'}" id="again">再跑一場</button>
       <button class="gbtn" id="closeaar">關閉</button></div>`,
-    ()=>{ $('again').onclick=()=>location.reload(); $('closeaar').onclick=()=>{$('modal').hidden=true;}; });
+    ()=>{ if ($('nextday')) $('nextday').onclick=goNextDay;
+      $('again').onclick=()=>{ if (DAY>4){ location.hash=`#seed=${SEED}`; } location.reload(); }; $('closeaar').onclick=()=>{$('modal').hidden=true;}; });
 }

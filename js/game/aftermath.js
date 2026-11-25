@@ -21,13 +21,14 @@ const FU_GENERIC = {
   route:'吞不下去、一直嗆咳', sig:'護理師照自己的理解給，間隔跟你想的不一樣，現在很想睡',
   old:'變得比較混亂，一直想下床', ident:'藥給到了另一個人手上', cold:'這一劑好像沒有效果',
   helper:'吃了之後說頭暈、心悸，護理師對了一下藥袋，覺得品項怪怪的',
+  label:'是照藥袋標籤上的寫法吃的——跟醫師開的不一樣',
   unverified:'用了之後反應比預期大，護理師說這一支的含量好像不一樣',
 };
 
 function spawnFollowUp(fu){
   const j=fu.j, p=j.pat, dn=(j.enName||j.drug.n).split(' ')[0];
-  const reason = j.flag || (fu.cause==='unverified'?'unverified':'helper');
-  const type = (fu.cause==='helper'||fu.cause==='unverified') ? 'clin' : FU_TYPE(reason);
+  const reason = fu.cause==='label' ? 'label' : (j.flag || (fu.cause==='unverified'?'unverified':'helper'));
+  const type = ['helper','unverified','label'].includes(fu.cause) ? 'clin' : FU_TYPE(reason);
   const who = type==='ctrl' ? '站長' : p.child ? '家屬' : pick(NURSES);
   const role = type==='ctrl' ? '站長' : p.child ? '家屬' : '護理師';
   const when = clock(j.doneAt!=null ? j.doneAt : S.t);
@@ -55,8 +56,9 @@ function spawnFollowUp(fu){
       {t:`跟站長說是大量傷患時處方被收走了，晚點應該找得回來`, v:'bad',
        fb:'沒有依據的說法，會讓真正的流向永遠查不清楚。'}];
   } else {
-    const sym = j.fx || FU_GENERIC[reason] || FU_GENERIC.inter;
-    q=`${p.nm} ${sym}。他是 ${when} 從你這裡拿到 ${dn} 的。現在怎麼辦？`;
+    const sym = (fu.cause==='label' ? FU_GENERIC.label : j.fx) || FU_GENERIC[reason] || FU_GENERIC.inter;
+    q = j.prevDay ? `${p.nm} 昨晚狀況變差，到現在還沒有好轉。昨天那張 ${dn} 是你配的，昨天沒有停藥評估、也沒有寫進紀錄。現在怎麼辦？`
+      : `${p.nm} ${sym}。他是 ${when} 從你這裡拿到 ${dn} 的。現在怎麼辦？`;
     if (p.sex==='女') q=q.replace('他是','她是');
     if (p.child) q=q.replace(/^/,'（家屬回到領藥窗口）');
     opts=[

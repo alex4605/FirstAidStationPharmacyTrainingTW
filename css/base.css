@@ -1,4 +1,4 @@
-/* 還開著 STILL OPEN — v1.10 藥師視角（EMT-2）
+/* 還開著 STILL OPEN — v1.11 藥師視角（EMT-2）
    昏暗的地下避難室裡只有調劑檯那盞暖白工作燈是亮的。
    琥珀＝你的作業面／冷青＝冷鏈／紫紅＝管制藥品／各工作類型有自己的色條。 */
 :root{
@@ -112,7 +112,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-v
 .age{position:absolute;right:11px;bottom:7px;font-size:9.5px;color:var(--ink-faint)}
 .age.late{color:var(--warn)}
 .kind{font-family:var(--mono);font-size:9px;letter-spacing:.14em;padding:0 5px;border:1px solid;margin-right:6px}
+.kind.wq{color:var(--k-edu);border-color:var(--k-edu)} .job.k-wq{border-left-color:var(--k-edu)}
+.paper.f-label{background-color:#1f1d17;border-color:#5a4a2a} .paper.f-label::before{background:#5a4a2a;color:#f3e6c6}
 .kind.walk{color:var(--k-idn);border-color:var(--k-idn)} .job.k-walk{border-left-color:var(--k-idn)}
+#hud-fat{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-top:2px}
+#hud-fat.hot{color:var(--warn)} #hud-fat.crit{color:var(--bad)}
+.counttop.raw{grid-template-columns:1fr}
 .kv b.told{color:var(--amber-hi)}
 .kind.fu{color:var(--bad);border-color:var(--bad)} .job.k-fu{border-left-color:var(--bad)}
 .kind.rx{color:var(--k-rx);border-color:var(--k-rx)} .kind.con{color:var(--k-con);border-color:var(--k-con)}

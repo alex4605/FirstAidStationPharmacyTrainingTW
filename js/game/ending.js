@@ -17,7 +17,7 @@ function openHandover(){
   const packHelper  = S.helpers.find(x=>x.active && x.scope.includes('pack'));
   openModal(`<h1>20:00</h1>
     <p class="kicker">依指引附表：夜班藥師編制 0 人 · 二班輪值 20:00–08:00</p>
-    <div class="note warn">你不會下班。外面的路在監視之下，你住的地方在三條街外，而且這是第四天。
+    <div class="note warn">你不會下班。外面的路在監視之下，你住的地方在三條街外，而且這是${dayName(DAY)}。
       <b>你今晚睡在這裡。</b>問題從「怎麼交班」變成「你要怎麼撐過今晚，還能有明天早上」。</div>
     ${q?`<div class="note">佇列還有 <b>${q} 項</b>未處理。</div>`:'<div class="note ok">佇列已清空。</div>'}
     <div class="note">目前疲勞 <b>${Math.round(S.fatigue)}／100</b>。
@@ -118,10 +118,19 @@ function runNight(mode, wake, nh){
     else
       push('04:50','冷藏庫溫度再次上升','bad','沒有人被交代要看溫度。早上你走過去的時候，面板顯示 14.6℃，已經這樣好幾個小時了。');
   }
+  // 白天沒處理好的錯誤，晚上會再出現——這一段引用的是你實際犯的那一筆
+  unresolvedFollowUps().slice(0,2).forEach((f,i)=>{
+    const s=f.src, dn=(s.enName||s.drug.n).split(' ')[0];
+    const watched = has('doubt') || (H.orders && H.note);
+    if (watched) push(i?'03:40':'02:20', `${s.pat.nm} 的狀況（#${String(s.n).padStart(2,'0')} ${dn}）`, 'mid',
+      `夜班照你留下的交代特別看了他。白天那筆沒有處理完整，但有人在看，狀況沒有再惡化。`);
+    else push(i?'03:40':'02:20', `${s.pat.nm} 的狀況（#${String(s.n).padStart(2,'0')} ${dn}）`, 'bad',
+      `白天那筆 ${dn} 沒有停藥評估、也沒有寫進紀錄。夜班不知道要看他，直到他的狀況變差才被發現。`);
+  });
   // 疲勞
   let fatigue;
   if (mode==='awake'){ fatigue=Math.min(100,S.fatigue+42);
-    push('06:00','天亮','mid','你一夜沒睡。所有事都經過你，所以幾乎沒有出錯——但你現在的判斷力比昨天差得多，而第五天的白班還是只有你一個藥師。');
+    push('06:00','天亮','mid',`你一夜沒睡。所有事都經過你，所以幾乎沒有出錯——但你現在的判斷力比昨天差得多，而${dayName(DAY+1)}的白班還是只有你一個藥師。`);
     mark('P8', false, '整夜未休息，違反人員輪替原則，隔日作業風險升高'); }
   else if (mode==='split'){ fatigue=Math.max(0,S.fatigue-18);
     push('06:00','天亮','ok',`你睡了大約四個小時，被叫醒 ${ev.filter(e=>e.ok==='ok').length} 次。這是這幾天最接近正常的一晚。`);
@@ -133,6 +142,8 @@ function runNight(mode, wake, nh){
     else { push('06:00','天亮','ok','你睡滿了，而且站還在運轉。你昨天留下的東西撐住了今晚。');
       mark('P8', true, '完整的書面交代與適當授權，使夜間作業在無藥師下仍安全'); }
   }
+  // 夜裡的時間軸：20:00 之後的排前面，跨過午夜的接在後面
+  const nk=t=>(t<'12:00'?'1':'0')+t; ev.sort((a,b)=>nk(a.t)<nk(b.t)?-1:1);
   S.night={mode,wake,ev,fatigue};
   ev.forEach(e=>{ if(e.ok==='bad') mark('P8',false,`${e.t} ${e.title}：未能安全處理`);
     else if (e.ok==='ok') mark('P8',true,`${e.t} ${e.title}：安全處理`); });
@@ -251,7 +262,7 @@ function endGame(){
     `<div class="note cold"><b>${d.t}　冷鏈處置</b><br>${d.choice}<br>${d.txt||'（未記錄理由）'}</div>`).join('');
 
   openModal(`<h1>行動後檢討 AAR</h1>
-    <p class="kicker">藥師（EMT-2）· 第四天白班 08:00–20:00 · 第一類急救站</p>
+    <p class="kicker">藥師（EMT-2）· ${dayName(DAY)}白班 08:00–20:00 · 第一類急救站</p>
     <div class="tblwrap"><table>
       <tr><th>處方</th><th>調劑</th><th>退回</th><th>正確攔截</th><th>過度阻擋</th><th>給藥事件</th><th>攔截率</th></tr>
       <tr><td>${rxs.length}</td><td>${S.dispensed}</td><td>${S.returned}</td><td>${S.blocked}</td>
@@ -285,13 +296,19 @@ function endGame(){
           <td style="color:${bd&&ct===bd?'var(--ok)':bd?'var(--bad)':'var(--ink-faint)'}">${bd?ct+'／'+bd:'—'}</td></tr>`;
       }).join('')}</table></div>
     <div class="note">今天 <b>${rxs.length}</b> 張處方裡有 <b>${rxs.filter(j=>j.flag).length}</b> 張帶著問題——
-      這不是「醫師很會開錯」，而是第四天的班表上，有幾個人正在做他平常不做的事。
+      這不是「醫師很會開錯」，而是${dayName(DAY)}的班表上，有幾個人正在做他平常不做的事。
       ${PRESCRIBERS.filter(d=>rxs.some(j=>j.by===d.n&&j.flag)).map(d=>
         `<br><br><b>${d.n}</b>（${d.sp}）：${d.tell}`).join('')}
       <br><br><span style="color:var(--ink-faint)">這一欄不是用來檢討醫師的。是用來說明一件事：
       把人放到他不熟的位置上，錯誤會落在可以預測的那幾格裡——知道會落在哪幾格，正是藥師站在這裡的理由。</span></div>
     <h2>帶著問題流出藥局的處方</h2>
     <div class="tblwrap"><table><tr><th>處方</th><th>品項</th><th>問題</th></tr>${missRows}</table></div>
+    <h2>錯誤之後</h2>
+    <div class="tblwrap"><table><tr><th>回來的時間</th><th>誰回來找你</th><th>發生什麼</th><th>你的處理</th></tr>${
+      S.jobs.filter(j=>j.kind==='fu').map(j=>{ const o=j.status==='done'?j.opts[j.picked]:null;
+        return `<tr><td>${clock(j.issued)}</td><td>${j.who}<br><span style="color:var(--ink-faint);font-size:11px">回到 #${String(j.src.n).padStart(2,'0')}</span></td>
+          <td>${j.q}</td><td class="verd ${!o?'v2':o.v==='good'?'v0':o.v==='mid'?'v1':'v2'}">${!o?'沒有處理':o.v==='good'?'如實處理':o.v==='mid'?'紀錄未跟上':'處理不當'}</td></tr>`; }).join('')
+      || '<tr><td colspan="4">今天沒有錯誤回來找你。</td></tr>'}</table></div>
     <h2>退回決策回放</h2>
     <div class="tblwrap"><table><tr><th>時間</th><th>處方</th><th>你的理由</th><th>判定</th></tr>${dec}</table></div>
     <h2>跨職類諮詢</h2>
@@ -340,7 +357,8 @@ function endGame(){
     <h2>本場紀錄</h2>
     <div style="max-height:170px;overflow:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);background:#0e1214;padding:9px;border:1px solid var(--line)">
       ${S.log.map(l=>`${l.t}　${l.m}`).join('<br>')}</div>
-    <div class="btnrow"><button class="pbtn" id="again">再跑一場</button>
+    <div class="btnrow">${storeOK?`<button class="pbtn" id="nextday">接續${dayName(DAY+1)}</button>`:''}<button class="${storeOK?'gbtn':'pbtn'}" id="again">再跑一場</button>
       <button class="gbtn" id="closeaar">關閉</button></div>`,
-    ()=>{ $('again').onclick=()=>location.reload(); $('closeaar').onclick=()=>{$('modal').hidden=true;}; });
+    ()=>{ if ($('nextday')) $('nextday').onclick=goNextDay;
+      $('again').onclick=()=>{ if (DAY>4){ location.hash=`#seed=${SEED}`; } location.reload(); }; $('closeaar').onclick=()=>{$('modal').hidden=true;}; });
 }

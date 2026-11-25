@@ -1,4 +1,4 @@
-/* 還開著 STILL OPEN — v1.9 藥師視角（EMT-2）
+/* 還開著 STILL OPEN — v1.11 藥師視角（EMT-2）
    昏暗的地下避難室裡只有調劑檯那盞暖白工作燈是亮的。
    琥珀＝你的作業面／冷青＝冷鏈／紫紅＝管制藥品／各工作類型有自己的色條。 */
 :root{
@@ -112,6 +112,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-v
 .age{position:absolute;right:11px;bottom:7px;font-size:9.5px;color:var(--ink-faint)}
 .age.late{color:var(--warn)}
 .kind{font-family:var(--mono);font-size:9px;letter-spacing:.14em;padding:0 5px;border:1px solid;margin-right:6px}
+.kind.wq{color:var(--k-edu);border-color:var(--k-edu)} .job.k-wq{border-left-color:var(--k-edu)}
+.paper.f-label{background-color:#1f1d17;border-color:#5a4a2a} .paper.f-label::before{background:#5a4a2a;color:#f3e6c6}
+.kind.walk{color:var(--k-idn);border-color:var(--k-idn)} .job.k-walk{border-left-color:var(--k-idn)}
+#hud-fat{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-faint);margin-top:2px}
+#hud-fat.hot{color:var(--warn)} #hud-fat.crit{color:var(--bad)}
+.counttop.raw{grid-template-columns:1fr}
+.kv b.told{color:var(--amber-hi)}
+.kind.fu{color:var(--bad);border-color:var(--bad)} .job.k-fu{border-left-color:var(--bad)}
 .kind.rx{color:var(--k-rx);border-color:var(--k-rx)} .kind.con{color:var(--k-con);border-color:var(--k-con)}
 .kind.edu{color:var(--k-edu);border-color:var(--k-edu)} .kind.emt{color:var(--k-emt);border-color:var(--k-emt);background:#2a1211}
 .kind.ass{color:var(--k-ass);border-color:var(--k-ass)}
@@ -386,3 +394,10 @@ html.compact .brand span,html.compact .brand i,html.compact .tbtn .lg{display:no
 .only-m{display:none}
 
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* 設計文件的版本沿革：收合 */
+details.ver{border-top:1px solid var(--line);padding:2px 0}
+details.ver summary{cursor:pointer;list-style:none;padding:9px 0 7px;font-weight:700;font-size:13px;color:var(--amber)}
+details.ver summary::-webkit-details-marker{display:none}
+details.ver summary::before{content:"▸";display:inline-block;width:14px;color:var(--ink-faint)}
+details.ver[open] summary::before{content:"▾"}

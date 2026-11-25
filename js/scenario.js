@@ -25,16 +25,27 @@ const RX_BAGS = [
   {d:'asa',  dose:'100 mg PO qd ×7 天份', why:'恢復他原本的心血管預防用藥。'}]},
  {pid:11, preferBy:'張醫師', items:[
   {d:'asa',  dose:'100 mg PO qd ×3 天份', why:'長期服用的低劑量 Aspirin，維持原劑量。'},
-  {d:'metf', dose:'500 mg PO bid ×3 天份', flag:'renal',
+  {d:'metf', dose:'500 mg PO bid ×3 天份', flag:'renal', fx:'更昏沉了，呼吸又深又快',
    why:'傷患11 是 82 歲、44 kg 的長者，正在脫水。脫水時 Metformin 有乳酸中毒的風險，這種時候要先暫停。',
    alt:'暫停 Metformin，先補水並評估腎功能，恢復進食後再請醫師決定。'}]},
  {pid:5, preferBy:'林醫師', items:[
   {d:'amlo', dose:'5 mg PO qd ×3 天份', why:'透析病人的降血壓藥，維持原劑量。'},
   {d:'asa',  dose:'100 mg PO qd ×3 天份', why:'維持原本的低劑量 Aspirin。'},
-  {d:'glim', dose:'5 mg PO qd ×3 天份', flag:'renal',
+  {d:'glim', dose:'5 mg PO qd ×3 天份', flag:'renal', fx:'冒冷汗、講話不清楚，血糖機量到 45',
    why:'傷患05 在透析、已中斷。腎功能這麼差，Glimepiride 的作用會拉長，低血糖風險高。',
    alt:'先不要配。請醫師重新評估降血糖用藥，並以血糖監測為主。'}]},
 ];
+/* 傍晚的工作：夜班沒有藥師，急救車要在交接前補齊並封好 */
+const EVENING_CART = {id:'a7', title:'夜班急救車補藥與交接', who:'周護理師',
+  ask:'快交班了。周護理師推著急救車過來：「夜班沒有藥師，這台車今晚就是全部。你幫我一起補齊、封好？」',
+  need:3, pts:[
+   {t:'依急救車清單逐項清點，缺的從庫房補足並登記',ok:true},
+   {t:'核對效期，近效期的前移並標示',ok:true},
+   {t:'把高警訊藥的位置與濃度寫在交接單上',ok:true},
+   {t:'登記封條編號，夜班開封要記錄時間與原因',ok:true},
+   {t:'放一兩支 Morphine 進車裡，夜班找不到你時先用',ok:false},
+   {t:'今晚先不上封條，夜班拿東西比較快',ok:false},
+   {t:'缺的品項寫在白板上，明天早上再一起補',ok:false}]};
 const SCENARIO = (()=>{
   const raw = JOBS.splice(0, JOBS.length);
   /* 處方池 ＝ 原本的敘事處方 ＋ 補充題庫。
@@ -105,19 +116,21 @@ const SCENARIO = (()=>{
     dup:   {pid:1, given:'acet'},          // 重複用藥：要先真的給過一次
     dose:  {pid:12, given:'mor'},          // 劑量翻倍：要先給過原劑量
   };
+  /* 一天的形狀：處方從早上一路開到傍晚，不是下午五點就停。
+     傍晚另有它自己的事——晚餐前的慢性病領藥、夜班交接前的補藥。 */
+  const endT = 690;
   const rest = shuffle(rxAll.filter(j=>!j.stat && !j.bag));
-  let t = rint(3,9);
-  rest.forEach(j=>{
-    if (t>mciT-14 && t<mciT+26) t = mciT+28;      // 避開大量傷患那一段
+  const rxT = spread(rest.length, 4, 672, 9);
+  rest.forEach((j,i)=>{
+    let t = rxT[i];
+    if (t>mciT-14 && t<mciT+26) t = mciT+26+rint(2,30);   // 大量傷患那一段，一般處方往後推
     const dep = j.flag && DEP[j.flag] && DEP[j.flag].pid===j.pid ? DEP[j.flag] : null;
     out.push({...j, t:Math.round(t), dep});
-    t += rint(15,31);
   });
-  const endT = Math.min(700, t);
-  // 藥袋：同一位病人的處方一起到（相隔一兩分鐘）
+  // 藥袋：晚餐前的慢性病領藥高峰（17:00–18:00）。同一位病人的處方一起到，幾袋幾乎同時
+  const eve = rint(545,575);
   [...new Set(bagJobs.map(j=>j.bag))].forEach((id,i)=>{
-    let tb = rint(70+i*170, 190+i*170);
-    if (tb>mciT-14 && tb<mciT+26) tb = mciT+30;
+    const tb = eve + i*rint(3,8);
     bagJobs.filter(j=>j.bag===id).forEach((j,k)=>out.push({...j, t:tb+k}));
   });
 
@@ -166,6 +179,23 @@ const SCENARIO = (()=>{
   // 幫手
   HELPERS.forEach(h=>out.push({t:h.t, kind:'help', h}));
 
+  /* 傍晚：領藥人潮跟著藥袋一起來；夜班交接前，急救車要補齊。 */
+  { const c=sample(CROWD_CASES.filter(c=>(c.id==='surge'||c.id==='shout') && !out.some(j=>j.kind==='crowd'&&j.id===c.id)),1)[0];
+    if (c) out.push({...c, kind:'crowd', t:eve+rint(4,12)}); }
+  out.push({...EVENING_CART, kind:'ass', t:rint(645,680)});
+  // 黃昏：如果這一場抽到了空襲或通訊中斷，讓其中一個落在天快黑的時候
+  { const d=out.find(j=>j.kind==='evt' && (j.id==='raid'||j.id==='comms')); if (d) d.t=rint(585,640); }
+
+  /* 同時發生：真正的排序抉擇不是「下一件做什麼」，而是「三件同時在等，先做哪一件」。
+     每場兩次，把一張處方、一件窗口前的事、一個諮詢或求援擠在同一兩分鐘裡。 */
+  [rint(100,250), rint(430,520)].forEach(T=>{
+    if (T>mciT-20 && T<mciT+40) return;
+    const near = out.filter(j=>Math.abs(j.t-T)<70 && j.kind!=='evt' && j.kind!=='help' && !j.dep && !j.bag);
+    const groups=[near.filter(j=>j.kind==='rx'), near.filter(j=>j.kind==='crowd'||j.kind==='lang'||j.kind==='edu'),
+      near.filter(j=>j.kind==='con'||j.kind==='emt2'||j.kind==='ass')];
+    groups.forEach((g,k)=>{ if (g.length) g[0].t = T+k; });
+  });
+
   out.sort((a,b)=>a.t-b.t);
   out.forEach(j=>JOBS.push(j));
   return {mciT, endT, n:out.length};
@@ -175,8 +205,8 @@ JOBS.push({t:rint(380,600), kind:'con', who:'葉心理師', role:'心理諮商�
   q:'避難民眾在傳「要吃碘片才不會被輻射傷到」，已經有人在問我們有沒有。我該怎麼跟他們說？',
   ctx:'本站庫備醫藥品清單（附件六）沒有碘化鉀（KI）。',
   opts:[
-   {t:'本站沒有碘化鉀；而且 KI 只針對放射性碘對甲狀腺的攝取，不是萬用的輻射防護，也不能預防外部曝露或其他核種。請他們以官方通報為準，不要自行服用來路不明的碘',v:'good',
-    fb:'正確。這一題的價值在於你同時做了三件事：講清楚我們沒有、糾正「碘片＝防輻射」的錯誤觀念、並阻止民眾自行服用高劑量碘。'},
-   {t:'跟他們說有，先安撫情緒再說',v:'bad',fb:'給不存在的保證，等他們來領藥時你會失去所有信任。'},
-   {t:'叫他們去買優碘擦脖子',v:'bad',fb:'這是真實流傳過的錯誤訊息，會造成灼傷與碘中毒。'}]});
+   {t:'本站沒有碘化鉀；KI 只防放射性碘、不是萬用防護，請大家以官方通報為準',v:'good',
+    fb:'正確。KI 只針對放射性碘對甲狀腺的攝取，不能預防外部曝露或其他核種。這一題的價值在於你同時做了三件事：講清楚我們沒有、糾正「碘片＝防輻射」的錯誤觀念、並阻止民眾自行服用來路不明的碘。'},
+   {t:'先跟大家說有在申請，安撫情緒，等真的需要再說',v:'bad',fb:'給不存在的保證，等他們來領藥時你會失去所有信任。'},
+   {t:'請大家用優碘擦脖子，可以達到類似碘片的效果',v:'bad',fb:'這是真實流傳過的錯誤訊息，會造成灼傷與碘中毒。'}]});
 JOBS.sort((a,b)=>a.t-b.t);

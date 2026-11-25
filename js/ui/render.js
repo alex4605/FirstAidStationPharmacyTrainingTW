@@ -52,6 +52,9 @@ function renderSpeech(){
 }
 function renderTop(){
   $('clock').textContent=clock(S.t);
+  const hfat=$('hud-fat'), fv=Math.round(S.fatigue);
+  hfat.textContent=`疲勞 ${fv}`+(S.fatigue>=EXHAUSTED?'・很累':S.fatigue>=TIRED?'・累了':'');
+  hfat.className=S.fatigue>=EXHAUSTED?'crit':S.fatigue>=TIRED?'hot':'';
   const f=$('g-fridge'); f.textContent=S.fridge.toFixed(1)+'℃';
   f.className=S.fridge>12?'crit':S.fridge>8?'hot':'';
   const fu=$('g-fuel'); fu.textContent=Math.round(S.fuel)+'L';
@@ -67,7 +70,7 @@ function renderTop(){
     : `Insulin ${drugById.ins.have} · TT ${drugById.tt.have} · Oxytocin ${drugById.oxy.have}`;
 }
 const qFilter={kind:'all', pendOnly:false};
-const KN={rx:['RX','rx'],con:['CON','con'],edu:['EDU','edu'],emt:['EMT','emt'],emt2:['EMT','emt'],logi:['物流','logi'],lang:['語言','lang'],
+const KN={wq:['窗口','wq'],walk:['巡視','walk'],fu:['後續','fu'],rx:['RX','rx'],con:['CON','con'],edu:['EDU','edu'],emt:['EMT','emt'],emt2:['EMT','emt'],logi:['物流','logi'],lang:['語言','lang'],
   ass:['ASS','ass'],cbr:['CBRNE','cbr'],help:['幫手','help'],crowd:['現場','crowd'],idn:['辨識','idn']};
 function renderHelpers(){
   const hm=$('hmeta');
@@ -98,7 +101,7 @@ function renderQueue(){
   S.jobs.forEach(j=>{ const k=j.kind==='emt2'?'emt':j.kind;
     counts[k]=counts[k]||{all:0,p:0}; counts[k].all++;
     if (j.status==='pending'){ counts[k].p++; pend++; } });
-  const FK=[['all','全部'],['rx','處方'],['con','諮詢'],['edu','衛教'],['emt','EMT'],
+  const FK=[['all','全部'],['wq','窗口'],['walk','巡視'],['fu','後續'],['rx','處方'],['con','諮詢'],['edu','衛教'],['emt','EMT'],
     ['ass','支援'],['logi','物流'],['idn','辨識'],['lang','語言'],['crowd','現場'],['cbr','CBRNE'],['help','幫手']];
   put('qfilter', FK.map(([k,n])=>{
     if (k==='all') return `<button class="qf" data-qf="all" aria-pressed="${qFilter.kind==='all'}">全部<b>${pend}</b></button>`;
@@ -133,6 +136,18 @@ function renderQueue(){
         j.byHelper&&j.status==='done'?`<span class="chip">${j.byHelper}配</span>`:'',
         j.status==='done'?(j.flag?'<span class="chip err">給藥事件</span>':'<span class="chip done">已調劑</span>'):'',
         j.status==='returned'?'<span class="chip ret">已退回</span>':''].join('');
+    } else if (j.kind==='wq'){
+      title=j.q.length>24?j.q.slice(0,24)+'…':j.q; sub=j.src.drug.n.split(' ')[0]; who=j.who;
+      if (j.status==='done'){ const v=j.opts[j.picked].v;
+        chips=`<span class="chip ${v==='good'?'done':v==='mid'?'ret':'err'}">${v==='good'?'回答正確':v==='mid'?'不完整':'說錯了'}</span>`; }
+    } else if (j.kind==='walk'){
+      title=j.title; sub=placeName(j.zone); who=j.sub==='bed'?j.who:'';
+      if (j.status!=='pending') chips=`<span class="chip ${j.status==='done'?'done':'err'}">${j.status==='done'?'已完成':'沒做到'}</span>`;
+      else chips=`<span class="chip">剩 ${Math.max(0,Math.round(j.due-S.t))} 分</span>`;
+    } else if (j.kind==='fu'){
+      title=`#${String(j.src.n).padStart(2,'0')} ${j.src.pat.nm} 的後續`; sub=j.role; who=j.who;
+      if (j.status==='done'){ const v=j.opts[j.picked].v;
+        chips=`<span class="chip ${v==='good'?'done':v==='mid'?'ret':'err'}">${v==='good'?'已處理':v==='mid'?'紀錄未跟上':'處理不當'}</span>`; }
     } else if (j.kind==='con'){
       title=j.q.length>26?j.q.slice(0,26)+'…':j.q; sub=j.role; who=j.who;
       if (j.status==='done'){ const v=j.opts[j.picked].v;
@@ -180,6 +195,9 @@ function renderQueue(){
     const pat = j.kind==='rx' ? `${j.pat.age}歲${j.pat.sex}・${j.pat.wt}kg・${j.pat.dx}`
       : j.kind==='edu' ? `${j.pat.age}歲${j.pat.sex}・${j.pat.dx}`
       : j.kind==='con' ? (j.ctx||'')
+      : j.kind==='fu' ? j.q.slice(0,34)+'…'
+      : j.kind==='wq' ? `剛拿到 ${j.src.drug.n}`
+      : j.kind==='walk' ? (j.sub==='bed'?`${j.src.dose}`:'每兩小時一次')
       : j.kind==='ass' ? j.ask.slice(0,38)+'…'
       : j.kind==='logi' ? (j.mode==='give'?j.c.give:j.c.take).slice(0,34)+'…'
       : j.kind==='idn' ? j.items.map(x=>x.brand.split('（')[0]).join('、').slice(0,34)+'…'
@@ -284,6 +302,9 @@ function renderDetail(){
   if (j.kind==='crowd') return renderCrowd(j);
   if (j.kind==='idn') return renderIdn(j);
   if (j.kind==='help') return renderHelp(j);
+  if (j.kind==='fu') return renderFu(j);
+  if (j.kind==='walk') return renderWalk(j);
+  if (j.kind==='wq') return renderWq(j);
 }
 
 /* 諮詢與 EMT-2 求援共用同一種版型：情境 → 單選 → 回饋。
@@ -351,11 +372,12 @@ function renderChecklistJob(j, cfg){
     <div class="acts">${j.pts.map((p,i)=>
       `<label class="chk ${j.picked.includes(i)?'on':''}"><input type="checkbox" data-ck="${i}" ${j.picked.includes(i)?'checked':''}>
         <span>${p.t}</span></label>`).join('')}</div>
-    <div class="btnrow"><button class="pbtn" data-cmd="ckgo" ${j.picked.length>=j.need?'':'disabled'}
-      style="${j.picked.length>=j.need?'':'opacity:.4;cursor:not-allowed'}">${cfg.go}</button></div></div>`;
+    ${cfg.gate && !atPlace(cfg.gate) ? `<div class="note warn">${j.pat.nm} 在${placeName(cfg.gate)}。用藥指導要當面做——走到床邊，才能完成。</div><div class="acts">${walkBtn(cfg.gate)}</div>` : ''}
+    <div class="btnrow"><button class="pbtn" data-cmd="ckgo" ${j.picked.length>=j.need&&!(cfg.gate&&!atPlace(cfg.gate))?'':'disabled'}
+      style="${j.picked.length>=j.need&&!(cfg.gate&&!atPlace(cfg.gate))?'':'opacity:.4;cursor:not-allowed'}">${cfg.go}</button></div></div>`;
   if (put('detail',h)){
     $('detail').querySelector('[data-cmd="ckgo"]').onclick=()=>{
-      if (j.picked.length>=j.need) cfg.submit(j); };
+      if (j.picked.length>=j.need && !(cfg.gate && !atPlace(cfg.gate))) cfg.submit(j); };
   }
 }
 function renderEdu(j){
@@ -365,6 +387,7 @@ function renderEdu(j){
     rows:`<div class="prow"><span>對象</span><b>${j.pat.nm}　${j.pat.dx}</b></div>
       <div class="prow"><span>情境</span><b style="color:var(--ink-dim);font-weight:400">${j.ask}</b></div>`,
     hint:`選出你要強調的重點（至少 ${j.need} 項）。<b>選到錯誤的衛教內容會扣分</b>——說錯比沒說更糟。`,
+    gate: eduPlace(j),
     doneLabel:'正確重點', badLabel:'錯誤內容', go:'完成用藥指導', submit:answerEdu});
 }
 function renderAss(j){
@@ -562,16 +585,23 @@ function renderRx(j){
   let h=`<div class="pane"><h2>處方 #${String(j.n).padStart(2,'0')}</h2>
     <div class="sub">${j.by} 開立於 ${clock(j.issued)}${pend?`　·　已等待 ${age} 分鐘`:`　·　${j.status==='done'?'已調劑':'已退回'}`}</div>
     ${rxPaper(j)}
-    <div class="five">${five.map(f=>`<div><span>${f[0]}</span><b>${f[1]}</b></div>`).join('')}</div>
+    ${pend && samePatientPending(j).length ? `<div class="note">同一位病人還有 ${samePatientPending(j).map(x=>`<button class="sbtn" data-j="${x.n}">#${String(x.n).padStart(2,'0')} ${rxName(x).split(' ')[0]}</button>`).join(' ')} 在等。
+      一起配、一起交付，第二張起每張省 1 分鐘——也一起看它們有沒有互相打架。</div>` : ''}
+    ${S.fatigue>=TIRED ? `<div class="note warn tired"><b>你累了。</b>五對不會自己跳出來——對著處方箋和病人紀錄，自己一格一格核對。${S.fatigue>=EXHAUSTED?'<br>數藥台也不會幫你算了。':''}</div>`
+      : `<div class="five">${five.map(f=>`<div><span>${f[0]}</span><b>${f[1]}</b></div>`).join('')}</div>`}
     <div class="pcard"><div class="ph"><b>藥局病人紀錄</b><span class="tagbox t${p.tag}">T${p.tag}</span></div>
       <div class="kv"><span>體重</span><b>${p.wt} kg${p.child?'（兒童）':''}</b></div>
       <div class="kv"><span>過敏史</span><b class="${p.allergy?'alert':''}">${p.allergy||'無紀錄'}</b></div>
-      <div class="kv"><span>長期用藥</span><b>${p.hx.length?p.hx.join('、'):'無紀錄'}</b></div>
+      <div class="kv"><span>長期用藥</span><b>${p.hx.length?p.hx.join('、'):'無紀錄'}</b></div>${
+        p.asked ? `<div class="kv"><span>${p.child?'家屬說':'病人說'}</span><b class="${p.ask.length?'told':''}">${p.ask.length?p.ask.join('<br>'):'沒有其他在吃的藥，也沒有特別要說的'}</b></div>`
+        : `<div class="kv"><span>詢問</span><b><button class="sbtn" data-cmd="askpt">問${p.child?'家屬':'病人'}（${T.askPt} 分鐘）</button>
+            <small style="display:block;color:var(--ink-faint)">紀錄上只有已知的事。在吃什麼、上次幾點吃、有沒有在餵母奶——沒問過的不會寫在這裡。</small></b></div>`}
       <div class="kv"><span>本站已給</span><b>${p.given.length?p.given.map(g=>drugById[g.d].n.split(' ')[0]+' '+clock(g.t)).join('、'):'尚未給藥'}</b></div>
-      <div class="kv"><span>已衛教</span><b>${p.educated.length?p.educated.join('、'):'無'}</b></div></div>
+      <div class="kv"><span>已衛教</span><b>${p.educated.length?p.educated.join('、'):'無'}</b></div>${
+        (p.events||[]).length?`<div class="kv"><span>事件</span><b class="alert">${p.events.map(e=>e.t+' '+e.txt).join('、')}</b></div>`:''}</div>
     <div class="note ${stock<=0?'warn':''}">
       ${sure?'實際庫存':'<b style="color:var(--warn)">帳面</b>庫存'}　<b>${stock} / 七日儲備 ${j.drug.q} ${j.drug.u}</b>${j.drug.note?'　·　'+j.drug.note:''}
-      ${sure?'':'<br><span style="color:var(--ink-faint)">第四天了，這個數字還沒有人核對過。架上不一定有這麼多。</span>'}
+      ${sure?'':'<br><span style="color:var(--ink-faint)">${dayName(DAY)}了，這個數字還沒有人核對過。架上不一定有這麼多。</span>'}
       ${j.drug.pk?`<br>包裝：${j.drug.pk.type==='blister'?`排裝，每排 ${j.drug.pk.per} 顆`:'罐裝，散裝計數'}`:''}
       ${given?`<br>此病人今日已給同品項 <b>${given}</b> 次`:''}</div>
     ${j.cold?`<div class="note cold">冷藏品項。冷藏庫目前 <b>${S.fridge.toFixed(1)}℃</b>${S.fridge>8?'　—　已脫離 2–8℃，效價存疑。':'　—　冷鏈正常。'}</div>`:''}
@@ -594,6 +624,13 @@ function renderRx(j){
       : `已退回，理由：<b>${REASON_N[j.reason]}</b>${j.txt?'<br>'+j.txt:''}`}</div></div>`;
     put('detail',h); return;
   }
+  // 交付前的標籤核對
+  if (j.labeling){
+    h+=labelPane(j)+'</div>';
+    if (put('detail',h)){ const q=c=>$('detail').querySelector(`[data-cmd="${c}"]`);
+      q('lbok').onclick=()=>labelDecide(j,false); q('lbfix').onclick=()=>labelDecide(j,true); }
+    return;
+  }
   // 數藥台
   if (j.counting){
     const d=j.drug, vl=vialOf(j);
@@ -602,15 +639,16 @@ function renderRx(j){
       /* 針劑／霧化／輸液：數的是支數。
          最容易出事的不是算錯，是伸手就拿一支。 */
       h+=`<div class="note"><b>取藥。</b>處方寫的是<b>劑量</b>，不是支數——一支裝多少，要你自己看。</div>
-        <div class="counttop">
+        ${S.fatigue>=EXHAUSTED ? `<div class="counttop raw"><div class="pkg"><span>處方</span><b>${j.dose}</b></div><div class="pkg"><span>品項</span><b>${d.n}</b></div></div>`
+        : `<div class="counttop">
           <div><span>處方一次</span><b>${vl.amt}</b>${vl.u}</div>
           <div><span>一支裝</span><b>${vl.per}</b>${vl.u}</div>
           <div><span>次數</span><b>${vl.days>0?`${vl.perDay}次 × ${vl.days}日`:(vl.doses>1?`${vl.doses} 次`:'單次')}</b></div>
           <div class="pkg"><span>品項</span><b>${d.n}</b></div>
-        </div>
+        </div>`}
         <div class="field"><label>你從架上（或冰箱）拿了幾${vl.unit}</label>
           <div class="cntrow">${stepper('total',c.total,true)}<span class="cu">${vl.unit}</span>
-            ${c.total>0?`<span class="cnttotal">＝ <b>${Math.round(c.total*vl.per*1000)/1000}</b> ${vl.u}</span>`:''}
+            ${c.total>0&&S.fatigue<TIRED?`<span class="cnttotal">＝ <b>${Math.round(c.total*vl.per*1000)/1000}</b> ${vl.u}</span>`:''}
           </div></div>
         ${d.st==='ctrl'?`<div class="note ctrl">管制藥品：取出的支數必須與簿冊登記一致，空瓶（安瓿）要留存。</div>`:''}
         <div class="btnrow">
@@ -631,18 +669,20 @@ function renderRx(j){
     }
     const sig=sigOf(j), bl=d.pk.type==='blister';
     h+=`<div class="note"><b>數藥。</b>處方寫的是用法，不是數量——數量要你自己算。</div>
-      <div class="counttop">
+      ${S.fatigue>=EXHAUSTED ? `<div class="counttop raw"><div class="pkg"><span>處方</span><b>${j.dose}</b></div>
+        <div class="pkg"><span>包裝</span><b>${d.n}　${bl?`排裝 ${d.pk.per} 顆／排`:'罐裝'}</b></div></div>`
+      : `<div class="counttop">
         <div><span>每次</span><b>${sig.per}</b>顆</div>
         <div><span>每日</span><b>${sig.perDay}</b>次</div>
         <div><span>天數</span><b>${sig.stat?'單次':sig.days+' 日'}</b></div>
         <div class="pkg"><span>包裝</span><b>${bl?`排裝　${d.pk.per} 顆／排`:'罐裝　散裝計數'}</b></div>
-      </div>
+      </div>`}
       ${bl?`<div class="field"><label>從藥排取出</label>
         <div class="cntrow"><span class="cl">整排</span>${stepper('strips',c.strips,false,true)}
           <span class="cu">排 × ${d.pk.per}</span></div>
         <div class="cntrow" style="margin-top:5px"><span class="cl">另取</span>${stepper('loose',c.loose,false,true)}
           <span class="cu">顆</span>
-          <span class="cnttotal">＝ <b>${c.strips*d.pk.per+c.loose}</b> 顆</span></div></div>`
+          ${S.fatigue<TIRED?`<span class="cnttotal">＝ <b>${c.strips*d.pk.per+c.loose}</b> 顆</span>`:''}</div></div>`
       :`<div class="field"><label>數出的顆數</label>
         <div class="cntrow">${stepper('total',c.total,true)}<span class="cu">顆</span></div></div>`}
       <div class="btnrow">
@@ -671,6 +711,7 @@ function renderRx(j){
   if (shortNow) h+=`<div class="note warn"><b>架上只有 ${j.drug.have} ${j.drug.u}，這張需要 ${j.short} ${j.drug.u}。</b>
     整張配不出來。可以先給第一劑、改用替代品項，或以「庫存不足」退回並附上建議。</div>`;
   h+=`<div class="acts">
+    ${!S.atBench?walkBtn('pharm','走回調劑檯'):''}
     ${j.ctrl?`<label class="chk ${j.ledger?'on':''}"><input type="checkbox" id="cl-led" ${j.ledger?'checked':''}>
       <span><b>逐筆登記於管制藥品簿冊</b><small>${S.sup.book?'品項、數量、病人、時間、簽章'
         :'<b style="color:var(--warn)">簿冊只剩最後幾頁</b>——再寫下去就得寫在便條紙上，那不算登記'}</small></span></label>
@@ -707,6 +748,7 @@ function renderRx(j){
         <button class="gbtn" id="retno">取消</button></div></div></div>`;
   if (put('detail',h)){
     const q=c=>$('detail').querySelector(`[data-cmd="${c}"]`);
+    q('askpt')&&(q('askpt').onclick=()=>askPatient(p));
     q('disp')&&(q('disp').onclick=()=>doDispense(j,false));
     q('ann')&&(q('ann').onclick=()=>doDispense(j,true));
     q('ask')&&(q('ask').onclick=()=>doAsk(j));
@@ -763,7 +805,7 @@ function idlePane(){
           <span class="aw">${BGJOBS[k].min} 分鐘・空檔工作，有事會自動放下</span></span>
           <span class="ac">${dn?'已完成':'開始'}</span></button>`;}).join('')}
       <button class="act" data-cmd="rest"><span class="an">短暫休息
-        <span class="aw">${T.rest} 分鐘・疲勞 ${Math.round(S.fatigue)}／100，超過 60 調劑會變慢</span></span><span class="ac">執行</span></button></div>
+        <span class="aw">${T.rest} 分鐘・疲勞 ${Math.round(S.fatigue)}／100。${TIRED} 以上五對要自己核對，${EXHAUSTED} 以上數藥台不幫你算</span></span><span class="ac">執行</span></button></div>
     <div class="note" style="margin-top:10px">空檔工作不必一口氣做完。你在等人、等窗口、等別人回話的時候它會繼續，
       一有工作進來就自動放下，之後從斷點接回去——畫面下方那一列就是它。</div>
     <div class="note" style="margin-top:12px"><b>五對</b>　對病人・對藥品・對劑量・對途徑・對時間<br>

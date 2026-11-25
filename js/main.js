@@ -79,7 +79,10 @@ function bind(){
   $('btn-auto').onclick=()=>{ S.autopause=!S.autopause;
     $('btn-auto').setAttribute('aria-pressed',S.autopause?'true':'false');
     log(S.autopause?'新事件自動暫停：開':'新事件自動暫停：關'); };
-  $('btn-bench').onclick=()=>{ player.pos=[BENCH[0],BENCH[1]+2.5]; player.yaw=Math.PI; player.wide=false;
+  $('btn-bench').onclick=()=>{ player.wide=false;
+    if (!S.task && !atPlace('pharm')){ goTo('pharm'); return; }   // 走回去要時間
+    if (S.task && !atPlace('pharm')) return;
+    player.pos=[BENCH[0],BENCH[1]+2.5]; player.yaw=Math.PI;
     log('回到調劑檯。'); };
   // 藥品架側欄
   $('stock-rail').onclick=()=>{ shelfUI.collapsed=!shelfUI.collapsed;
@@ -138,6 +141,8 @@ function bind(){
     if (jb){ S.sel=+jb.dataset.j; dirty.q=dirty.detail=dirty.stock=true;
       if (MOBILE()) setTab('act');                 // 手機：點了工作就直接帶你到處置面板
       return; }
+    const wk=e.target.closest('[data-walk]');
+    if (wk){ goTo(wk.dataset.walk); return; }
     const c=e.target.closest('[data-cmd]'); if (!c) return;
     const cmd=c.dataset.cmd;
     if (cmd==='bgstart') startBg(c.dataset.bgid);
@@ -197,8 +202,10 @@ function bind(){
 }
 function start(){
   layoutClass();
-  // 第四天了，耗材不是只有藥會少。哪幾樣短缺由種子決定
-  ['sharp','label','oral','book'].forEach(k=>{ if (chance(.34)) S.sup[k]=false; });
+  // 第四天了，耗材不是只有藥會少。哪幾樣短缺由種子決定；接續的日子則帶著昨天的狀態開站
+  const carried = applyCarry();
+  if (!carried) ['sharp','label','oral','book'].forEach(k=>{ if (chance(.34)) S.sup[k]=false; });
+  $('dayname').textContent = dayName(DAY);
   // 沒有 WebGL（舊裝置、省電模式、three.js 沒載到）時，站內平面圖看不到，但值班照常進行
   try { init3D(); }
   catch(e){
@@ -209,6 +216,7 @@ function start(){
   }
   bind(); syncSpeed();
   log('急救站設置參考指引（114 年衛部醫字第 1141669299 號）第一類急救站。');
+  morningAfter();
   Object.keys(SUP_SHORT).forEach(k=>{ if (!S.sup[k]) log('※ '+SUP_SHORT[k],'l-warn'); });
   renderTop(); renderQueue(); renderHelpers(); renderShelf(); renderDetail(); renderLog();
   requestAnimationFrame(loop);

@@ -321,7 +321,7 @@ function finishHelperRx(h,j){
     }
     // 沒做作業簡介 → 他照單配出去
     j.drug.have=Math.max(0,j.drug.have-1);
-    j.status='done'; j.doneAt=S.t; j.byHelper=name; S.dispensed++; S.errors++; j.pat.harm++;
+    j.status='done'; j.doneAt=S.t; j.byHelper=name; S.dispensed++; harm(j,'helperRx');
     j.pat.given.push({d:j.drug.id,t:S.t});
     say(name, `#${String(j.n).padStart(2,'0')} 配好了，我請人拿走了。`, 4200);
     log(`※ 給藥事件：#${j.n} ${j.pat.nm} ${j.drug.n} — ${REASON_N[j.flag]}（${name} 獨立作業，未經作業簡介）`,'l-bad');

@@ -1245,6 +1245,7 @@ function init3D(){
   // 碎屑每次打擊都從原本的高度落下
   M.debrisY=Float32Array.from({length:B},(_,i)=>ba[i*3+1]);
   optimizeStatic();
+  ppInit(); PP.on=PP.ok;
   redrawTextOnFonts();
   onResize();
   // 視窗或宿主容器變動時重算斷點；斷點一變版面就換，3D 也要重新量一次
@@ -1383,6 +1384,80 @@ function onResize(){
   if (!renderer) return;
   const st=$('stage'); const w=st.clientWidth||640,h=st.clientHeight||420;
   renderer.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix();
+  if (PP.ready) ppResize();
+}
+/* ---------- 後製 ----------
+   只在桌機、WebGL2、最高畫質等級開：
+   1. 場景畫進一張多重取樣的離屏貼圖（保留抗鋸齒；存成 sRGB，暗部比較不會有色階）；
+   2. 四分之一解析度取出亮的部分，水平、垂直各模糊一次 → 真正的光暈（bloom）：
+      工作燈、緊急照明、冷藏庫面板、白袍在燈下，會自然地往外暈開；
+   3. 合成：加上光暈、輕微的調色（暗部偏冷、亮部偏暖）、一層很淡的底片顆粒。
+   幀率掉下來時，自適應畫質第一個關掉的就是它；手機與 WebGL1 完全不走這條路。 */
+const PP={ready:false, on:false, ok:false};
+function ppInit(){
+  const caps=renderer.capabilities;
+  PP.ok = !!caps.isWebGL2 && !MOBILE() && !!THREE.WebGLMultisampleRenderTarget;
+  if (!PP.ok) return;
+  try {
+    const opt={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat};
+    PP.main=new THREE.WebGLMultisampleRenderTarget(4,4,opt); PP.main.samples=4;
+    PP.main.texture.encoding=THREE.sRGBEncoding;
+    PP.a=new THREE.WebGLRenderTarget(4,4,opt); PP.b=new THREE.WebGLRenderTarget(4,4,opt);
+    PP.cam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+    PP.quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2)); PP.quad.frustumCulled=false;
+    PP.scene=new THREE.Scene(); PP.scene.add(PP.quad);
+    const vs='varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }';
+    const mk=(u,fs)=>new THREE.ShaderMaterial({uniforms:u,vertexShader:vs,fragmentShader:fs,depthTest:false,depthWrite:false,toneMapped:false});
+    PP.bright=mk({tDiffuse:{value:null},texel:{value:new THREE.Vector2()},thr:{value:.66}},`
+      uniform sampler2D tDiffuse; uniform vec2 texel; uniform float thr; varying vec2 vUv;
+      void main(){
+        vec3 c=( texture2D(tDiffuse,vUv+texel*vec2(-1.,-1.)).rgb + texture2D(tDiffuse,vUv+texel*vec2(1.,-1.)).rgb
+               + texture2D(tDiffuse,vUv+texel*vec2(-1.,1.)).rgb + texture2D(tDiffuse,vUv+texel*vec2(1.,1.)).rgb )*.25;
+        float l=max(c.r,max(c.g,c.b));
+        gl_FragColor=vec4(c*smoothstep(thr,thr+.28,l),1.);
+      }`);
+    PP.blur=mk({tDiffuse:{value:null},dir:{value:new THREE.Vector2()}},`
+      uniform sampler2D tDiffuse; uniform vec2 dir; varying vec2 vUv;
+      void main(){
+        vec3 c=texture2D(tDiffuse,vUv).rgb*.227;
+        c+=(texture2D(tDiffuse,vUv+dir*1.385).rgb+texture2D(tDiffuse,vUv-dir*1.385).rgb)*.316;
+        c+=(texture2D(tDiffuse,vUv+dir*3.231).rgb+texture2D(tDiffuse,vUv-dir*3.231).rgb)*.070;
+        gl_FragColor=vec4(c,1.);
+      }`);
+    PP.comp=mk({tDiffuse:{value:null},tBloom:{value:null},strength:{value:.7},grain:{value:.022},
+      time:{value:0},res:{value:new THREE.Vector2()}},`
+      uniform sampler2D tDiffuse,tBloom; uniform float strength,grain,time; uniform vec2 res; varying vec2 vUv;
+      void main(){
+        vec3 c=texture2D(tDiffuse,vUv).rgb + texture2D(tBloom,vUv).rgb*strength;
+        float l=dot(c,vec3(.299,.587,.114));
+        c=mix(c,c*vec3(.93,1.01,1.07),(1.-smoothstep(0.,.45,l))*.55);   // 暗部偏冷
+        c=mix(c,c*vec3(1.05,1.,.92),smoothstep(.45,1.,l)*.45);          // 亮部偏暖
+        c=(c-.5)*1.05+.5;
+        float n=fract(sin(dot(floor(vUv*res)+fract(time)*vec2(61.3,17.7),vec2(12.9898,78.233)))*43758.5453);
+        c+=(n-.5)*grain;
+        gl_FragColor=vec4(clamp(c,0.,1.),1.);
+      }`);
+    PP.ready=true; ppResize();
+  } catch(e){ console.warn('post-processing disabled',e); PP.ok=false; PP.ready=false; }
+}
+function ppResize(){
+  const v=renderer.getDrawingBufferSize(new THREE.Vector2());
+  PP.main.setSize(v.x,v.y);
+  const qx=Math.max(1,Math.round(v.x/4)), qy=Math.max(1,Math.round(v.y/4));
+  PP.a.setSize(qx,qy); PP.b.setSize(qx,qy);
+  PP.bright.uniforms.texel.value.set(1/v.x,1/v.y);
+  PP.blurX=new THREE.Vector2(1.6/qx,0); PP.blurY=new THREE.Vector2(0,1.6/qy);
+  PP.comp.uniforms.res.value.set(v.x,v.y);
+}
+function ppPass(mat,target){ PP.quad.material=mat; renderer.setRenderTarget(target); renderer.render(PP.scene,PP.cam); }
+function drawFrame(now){
+  if (!(PP.ready && PP.on)){ renderer.render(scene,cam); return; }
+  renderer.setRenderTarget(PP.main); renderer.render(scene,cam);
+  PP.bright.uniforms.tDiffuse.value=PP.main.texture; ppPass(PP.bright,PP.a);
+  PP.blur.uniforms.tDiffuse.value=PP.a.texture; PP.blur.uniforms.dir.value=PP.blurX; ppPass(PP.blur,PP.b);
+  PP.blur.uniforms.tDiffuse.value=PP.b.texture; PP.blur.uniforms.dir.value=PP.blurY; ppPass(PP.blur,PP.a);
+  const u=PP.comp.uniforms; u.tDiffuse.value=PP.main.texture; u.tBloom.value=PP.a.texture; u.time.value=now/1000;
+  ppPass(PP.comp,null);
 }
 function drawFridge(){
   const g=M.fctx, hot=S.fridge>8;
@@ -1639,5 +1714,5 @@ function render3D(dt){
   const fb=Math.max(0,Math.min(10,Math.round((S.fatigue-45)/5.5)));
   if (fb!==M.fatB){ M.fatB=fb; const st=$('stage').style;
     st.setProperty('--vin',(36-fb*1.6)+'%'); st.setProperty('--vo',(.74+fb*.016).toFixed(3)); }
-  renderer.render(scene,cam);
+  drawFrame(now);
 }

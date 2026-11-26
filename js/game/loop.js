@@ -4,11 +4,12 @@
 /* ---------- 8. 主迴圈 ---------- */
 let last=0, shake=0, debris=0;
 /* 畫質自適應：依實際幀率在四個等級之間調整，寧可少一點光影也不要卡。
-   3 全畫質 → 2 陰影每三幀更新一次 → 1 再把像素比降到 1 → 0 關閉陰影。
+   3 全畫質（桌機含後製光暈）→ 2 關掉後製、陰影每三幀更新一次 → 1 再把像素比降到 1 → 0 關閉陰影。
    2、1 兩級在幀率回穩後會自己升回去；關掉陰影要重新編譯材質，所以 0 不再往回升。 */
 const perf={frames:0, acc:0, level:3, warm:0, bad:0, good:0, shadowEvery:1};
 function setQuality(lv){
   perf.level=lv;
+  PP.on = PP.ok && lv>=3;                  // 後製（光暈、調色）只在最高一級
   perf.shadowEvery = lv>=3 ? 1 : 3;
   renderer.setPixelRatio(lv>=2 ? M.basePR : 1);
   if (lv===0){ renderer.shadowMap.enabled=false; scene.traverse(o=>{o.castShadow=false;}); }
@@ -27,7 +28,7 @@ function tuneQuality(raw){
     perf.bad=0; perf.good=0;
     setQuality(perf.level-1);
     log(['畫質已調降（關閉陰影）以維持流暢。','畫質已調降（像素比）以維持流暢。',
-      '畫質已調降（陰影更新頻率）以維持流暢。'][perf.level]);
+      '畫質已調降（後製光暈與陰影更新頻率）以維持流暢。'][perf.level]);
   } else if (perf.good>=4 && perf.level>0 && perf.level<3){
     perf.good=0;
     setQuality(perf.level+1);              // 回穩了就升回去，不另外通知

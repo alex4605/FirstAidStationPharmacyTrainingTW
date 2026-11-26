@@ -1973,6 +1973,7 @@ function render3D(dt){
     sp.material.opacity = player.wide?.6:Math.max(0,Math.min(.58,(d-3)/9)); });
   M.lifeU.value=now/1000;
   stepStrikeFx(dt,now);
+  if (typeof audioTick==='function') audioTick(dt,now);
   if (M.flash>.4) M.lights.forEach(l=>l.intensity+=M.flash*3);   // 打擊那一瞬，所有燈一起爆亮
   // 手電筒：緊急照明亮起之後才拿出來；光束隨手微微晃
   const emg=M.power.mode==='emg';

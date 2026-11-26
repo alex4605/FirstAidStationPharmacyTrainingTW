@@ -949,7 +949,8 @@ function init3D(){
       im.setColorAt(idx,c);
     }
     im.instanceMatrix.needsUpdate=true; if (im.instanceColor) im.instanceColor.needsUpdate=true;
-    scene.add(im);
+    im.frustumCulled=false;                         // 實體散在架上，網格原點在場地中央：不能用原點判斷是否在畫面內
+    scene.add(im); M.shelfIM=im;
   }
   const sb=occ(box(4.9,2.5,.14,0x1a2124,{own:true})); sb.position.set(BENCH[0]-.2,1.25,BENCH[1]-2.16); scene.add(sb);
   const cab=box(1.0,1.7,.6,0x2a2226,{rough:.65,metal:.2});
@@ -1280,6 +1281,7 @@ function init3D(){
     t.visible=false; M.player.add(t); M.player.userData.torch=t; }
   // 碎屑每次打擊都從原本的高度落下
   M.debrisY=Float32Array.from({length:B},(_,i)=>ba[i*3+1]);
+  initStrikeFx(small);
   optimizeStatic();
   ppInit(); PP.on=PP.ok;
   redrawTextOnFonts();
@@ -1304,6 +1306,7 @@ function optimizeStatic(){
   Object.values(M.glows||{}).forEach(K);
   if (M.emg) [...M.emg.glows,...M.emg.exit].forEach(K);
   [M.baskets,M.labels,M.occ,M.sec,M.lights].forEach(a=>(a||[]).forEach(K));
+  [M.sift,M.burst,M.rubble,M.shelfIM].forEach(K);
   M.npcs.forEach(n=>K(n.g));
   [M.player,M.consult,dust,M.motes,...M.sec,...M.npcs.map(n=>n.g)].forEach(o=>dyn.add(o));
   scene.updateMatrixWorld(true);
@@ -1502,6 +1505,143 @@ function fadeOccluders(dt){
     const t=u.fade<.995;
     m.material.opacity=u.fade; m.material.transparent=t; m.material.depthWrite=!t;
   });
+}
+/* ---------- 空襲 ----------
+   遊戲裡空襲分四段：遠處嗡鳴（2）→ 低空盤旋（3）→ 打擊（4）。畫面跟著走：
+   ・2、3 段：天花板不時落下細灰；3 段偶爾一下輕微的震動。
+   ・打擊：一瞬白光、所有燈一閃；配電室那一側的天花板掉下幾塊水泥，落地後留著；
+     配電室與藥品架兩處揚起大團粉塵；架上一部分藥盒摔到地上（就是「藥品架部分倒塌」），之後一直散在那裡；
+     空氣裡的粉塵讓整個地下室起霧、偏褐，半分鐘左右才慢慢散。 */
+function initStrikeFx(small){
+  const dot=(()=>{ const c=document.createElement('canvas'); c.width=c.height=32;
+    const g=c.getContext('2d'), gr=g.createRadialGradient(16,16,0,16,16,16);
+    gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(.5,'rgba(255,255,255,.35)'); gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr; g.fillRect(0,0,32,32); return new THREE.CanvasTexture(c); })();
+  // 天花板落灰：一池粒子，每次「落灰」從一處天花板放下一串
+  const NS=small?60:120, sp=new Float32Array(NS*3).fill(-50);
+  const sg=new THREE.BufferGeometry(); sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+  M.sift=new THREE.Points(sg,new THREE.PointsMaterial({color:0xb8ad98,size:.05,map:dot,transparent:true,opacity:.7,depthWrite:false}));
+  M.sift.frustumCulled=false; scene.add(M.sift);
+  M.siftV=new Float32Array(NS*3); M.siftNext=0; M.siftT=fxRnd(8,20);
+  // 打擊的粉塵雲：大顆、柔邊、會往外擴散再慢慢沉下來
+  const NB=small?90:180, bp=new Float32Array(NB*3).fill(-50);
+  const bg=new THREE.BufferGeometry(); bg.setAttribute('position',new THREE.BufferAttribute(bp,3));
+  M.burst=new THREE.Points(bg,new THREE.PointsMaterial({color:0x8e8576,size:.9,map:dot,transparent:true,opacity:0,depthWrite:false}));
+  M.burst.frustumCulled=false; scene.add(M.burst);
+  M.burstV=new Float32Array(NB*3);
+  // 掉下來的水泥塊（一個 InstancedMesh，平常藏在地板下）
+  const NR=7;
+  M.rubble=new THREE.InstancedMesh(new THREE.DodecahedronGeometry(.2,0), stdMat(0x5d605c,.95), NR);
+  M.rubble.castShadow=true; M.rubble.receiveShadow=true; M.rubble.frustumCulled=false;
+  const m4=new THREE.Matrix4().makeTranslation(0,-50,0);
+  for (let i=0;i<NR;i++) M.rubble.setMatrixAt(i,m4);
+  M.rubble.instanceMatrix.needsUpdate=true; scene.add(M.rubble);
+  M.rubbleS=[];
+  // 閃光：場景上方一層，平常透明
+  const fl=document.createElement('div'); fl.id='strikeflash';
+  fl.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:2;opacity:0;'+
+    'background:radial-gradient(ellipse at 22% 40%,rgba(255,244,220,.95),rgba(255,190,120,.55) 45%,rgba(120,70,30,.15) 100%);';
+  $('stage').appendChild(fl); M.flashEl=fl; M.flash=0;
+  M.haze=0; M.lastStrikes=S.strikes||0;
+}
+const _m4=new THREE.Matrix4(), _q=new THREE.Quaternion(), _e=new THREE.Euler(), _v3=new THREE.Vector3(), _s3=new THREE.Vector3(1,1,1);
+function siftDust(x,z,n){
+  const p=M.sift.geometry.attributes.position, N=p.count;
+  for (let k=0;k<n;k++){ const i=(M.siftNext++)%N;
+    p.setXYZ(i, x+fxRnd(-.25,.25), 3.3-fxRnd(0,.4)*k/n, z+fxRnd(-.25,.25));
+    M.siftV[i*3]=fxRnd(-.05,.05); M.siftV[i*3+1]=-fxRnd(.6,1.3); M.siftV[i*3+2]=fxRnd(-.05,.05); }
+  p.needsUpdate=true;
+}
+function strikeFx(){
+  M.flash=1; M.haze=1;
+  // 粉塵雲：一半從配電室（西牆、發電機那一帶），一半從藥品架
+  const p=M.burst.geometry.attributes.position, N=p.count, V=M.burstV;
+  for (let i=0;i<N;i++){
+    const shelf=i%2===1, ox=shelf?BENCH[0]-.2:-11.6, oz=shelf?BENCH[1]-1.7:-2.0;
+    p.setXYZ(i, ox+fxRnd(-.6,.6), fxRnd(.3,shelf?2.2:3.2), oz+fxRnd(-.6,.6));
+    const a=fxRnd(0,6.283), sp=fxRnd(.5,shelf?1.6:2.6);
+    V[i*3]=Math.cos(a)*sp; V[i*3+1]=fxRnd(-.1,.5); V[i*3+2]=Math.sin(a)*sp*(shelf?.6:1)+(shelf?.6:0);
+  }
+  p.needsUpdate=true; M.burst.material.opacity=.55; M.burstT=0;
+  // 天花板掉下來的水泥塊
+  M.rubbleS=[];
+  for (let i=0;i<M.rubble.count;i++) M.rubbleS.push({p:[fxRnd(-12.6,-9.8),3.3+fxRnd(0,.3),fxRnd(-4.2,.4)],
+    v:[fxRnd(-.4,.4),0,fxRnd(-.4,.4)], r:[fxRnd(0,6),fxRnd(0,6),fxRnd(0,6)], w:[fxRnd(-4,4),fxRnd(-4,4),fxRnd(-4,4)],
+    s:fxRnd(.6,1.5), d:fxRnd(0,.5), done:false});
+  // 藥品架：十來盒摔下來，散在架前的地上
+  const im=M.shelfIM; if (im && !M.shelfFall){
+    M.shelfFall=[];
+    // 用 Math.random 洗牌，不用 shuffle()：那個吃種子，會讓同一個種子的劇情跑出不同結果
+    const pick=[...Array(im.count).keys()].map(i=>[Math.random(),i]).sort((x,y)=>x[0]-y[0]).slice(0,11).map(x=>x[1]);
+    pick.forEach(idx=>{ im.getMatrixAt(idx,_m4); _v3.setFromMatrixPosition(_m4);
+      M.shelfFall.push({idx, a:_v3.toArray(), b:[_v3.x+fxRnd(-.45,.45), .2, BENCH[1]-1.9+fxRnd(.45,1.35)],
+        r:[fxRnd(-1.6,1.6),fxRnd(-3,3),Math.random()<.5?Math.PI/2:fxRnd(-.4,.4)], t:-fxRnd(0,.35), T:fxRnd(.45,.75)}); });
+  }
+  siftDust(-10.6,-2.0,40); siftDust(BENCH[0],BENCH[1]-1.2,30);
+}
+function stepStrikeFx(dt,now){
+  if (!M.sift) return;
+  if ((S.strikes||0)>M.lastStrikes){ M.lastStrikes=S.strikes; strikeFx(); }
+  // 威脅升高時的落灰與震動
+  if (S.stage>=2 && S.running && !S.over){
+    M.siftT-=dt;
+    if (M.siftT<=0){
+      M.siftT = S.stage>=3 ? fxRnd(6,14) : fxRnd(14,30);
+      siftDust(fxRnd(-12,12),fxRnd(-8.5,5.5),S.stage>=3?22:12);
+      if (S.stage>=3 && Math.random()<.5) shake=Math.max(shake,.16);
+    }
+  }
+  // 落灰粒子
+  { const p=M.sift.geometry.attributes.position, V=M.siftV; let any=false;
+    for (let i=0;i<p.count;i++){ const y=p.getY(i); if (y<-10) continue; any=true;
+      if (y<=.02){ p.setY(i,-50); continue; }
+      p.setXYZ(i,p.getX(i)+V[i*3]*dt,y+V[i*3+1]*dt,p.getZ(i)+V[i*3+2]*dt); }
+    if (any) p.needsUpdate=true; }
+  // 粉塵雲：往外擴散、減速、慢慢沉，整團淡掉
+  if (M.burst.material.opacity>0){
+    M.burstT+=dt;
+    const p=M.burst.geometry.attributes.position, V=M.burstV, k=Math.exp(-dt*1.2);
+    for (let i=0;i<p.count;i++){ V[i*3]*=k; V[i*3+2]*=k; V[i*3+1]=V[i*3+1]*k-dt*.05;
+      p.setXYZ(i,p.getX(i)+V[i*3]*dt,Math.max(.15,p.getY(i)+V[i*3+1]*dt),p.getZ(i)+V[i*3+2]*dt); }
+    p.needsUpdate=true;
+    M.burst.material.size=.9+M.burstT*.25;
+    M.burst.material.opacity=Math.max(0,.55-M.burstT*.045);
+  }
+  // 水泥塊：自由落體、落地彈一下就停
+  if (M.rubbleS.length){
+    let moving=false;
+    M.rubbleS.forEach((r,i)=>{
+      if (r.d>0){ r.d-=dt; moving=true; return; }
+      if (!r.done){ moving=true;
+        r.v[1]-=9.8*dt; for (let k=0;k<3;k++){ r.p[k]+=r.v[k]*dt; r.r[k]+=r.w[k]*dt; }
+        const fl=.2*r.s*.8;
+        if (r.p[1]<=fl){ r.p[1]=fl; if (Math.abs(r.v[1])>1.2){ r.v[1]*=-.25; r.v[0]*=.5; r.v[2]*=.5; r.w=r.w.map(w=>w*.4); }
+          else { r.done=true; siftDust(r.p[0],r.p[2],6); } }
+      }
+      _q.setFromEuler(_e.set(...r.r)); _s3.set(r.s,r.s*.8,r.s);
+      _m4.compose(_v3.set(...r.p),_q,_s3); M.rubble.setMatrixAt(i,_m4);
+    });
+    M.rubble.instanceMatrix.needsUpdate=true;
+    if (!moving) M.rubbleS=M.rubbleS.filter(()=>false), M.rubbleDone=true;
+  }
+  // 摔下來的藥盒
+  if (M.shelfFall && !M.shelfDone){
+    let all=true;
+    M.shelfFall.forEach(f=>{ f.t+=dt; const u=Math.max(0,Math.min(1,f.t/f.T)); if (u<1) all=false;
+      const x=f.a[0]+(f.b[0]-f.a[0])*u, z=f.a[2]+(f.b[2]-f.a[2])*u;
+      const y=f.a[1]+(f.b[1]-f.a[1])*u*u + Math.sin(u*Math.PI)*.15;      // 先往外、再往下掉
+      _q.setFromEuler(_e.set(f.r[0]*u,f.r[1]*u,f.r[2]*u)); _m4.compose(_v3.set(x,y,z),_q,_s3.set(1,1,1));
+      M.shelfIM.setMatrixAt(f.idx,_m4); });
+    M.shelfIM.instanceMatrix.needsUpdate=true;
+    if (all) M.shelfDone=true;
+  }
+  // 閃光與燈光
+  if (M.flash>0){ M.flashEl.style.opacity=(M.flash*M.flash).toFixed(3); M.flash=Math.max(0,M.flash-dt*2.2); }
+  else if (M.flashEl.style.opacity!=='0') M.flashEl.style.opacity='0';
+  // 空氣裡的粉塵：霧變濃、偏褐，慢慢散
+  if (M.haze>0){ M.haze=Math.max(0,M.haze-dt/32); }
+  scene.fog.density=.030+M.haze*.05;
+  scene.fog.color.setRGB(.024+M.haze*.11,.031+M.haze*.09,.039+M.haze*.06);
 }
 function onResize(){
   if (!renderer) return;
@@ -1832,6 +1972,8 @@ function render3D(dt){
   M.labels.forEach(sp=>{ const d=Math.hypot(sp.position.x-player.pos[0],sp.position.z-player.pos[1]);
     sp.material.opacity = player.wide?.6:Math.max(0,Math.min(.58,(d-3)/9)); });
   M.lifeU.value=now/1000;
+  stepStrikeFx(dt,now);
+  if (M.flash>.4) M.lights.forEach(l=>l.intensity+=M.flash*3);   // 打擊那一瞬，所有燈一起爆亮
   // 手電筒：緊急照明亮起之後才拿出來；光束隨手微微晃
   const emg=M.power.mode==='emg';
   M.npcs.forEach((n,i)=>{ const t=n.g.userData.torch; if (!t) return;

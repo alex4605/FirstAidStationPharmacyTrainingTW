@@ -210,6 +210,7 @@ function bakeGeo(list, mtx, glow){
     nv+=n; ni+=g.index?g.index.count:n; if (!g.attributes.uv) hasUV=false; });
   const pos=new Float32Array(nv*3), nor=new Float32Array(nv*3), col=new Float32Array(nv*3);
   const uv=hasUV?new Float32Array(nv*2):null, idx=new (nv>65535?Uint32Array:Uint16Array)(ni);
+  const hasLife=list.some(m=>m.userData.lifeV), life=hasLife?new Float32Array(nv*4):null;
   let vo=0, io=0;
   list.forEach(m=>{
     const g=m.geometry, P=g.attributes.position, N=g.attributes.normal, U=g.attributes.uv, C=g.attributes.color;
@@ -226,6 +227,7 @@ function bakeGeo(list, mtx, glow){
       if (C){ col[o]=C.getX(i); col[o+1]=C.getY(i); col[o+2]=C.getZ(i); }
       else { col[o]=_bc.r; col[o+1]=_bc.g; col[o+2]=_bc.b; }
       if (uv){ uv[(vo+i)*2]=U.getX(i); uv[(vo+i)*2+1]=U.getY(i); }
+      if (life && m.userData.lifeV) life.set(m.userData.lifeV,(vo+i)*4);
     }
     if (g.index) for (let i=0;i<g.index.count;i++) idx[io++]=g.index.getX(i)+vo;
     else for (let i=0;i<P.count;i++) idx[io++]=vo+i;
@@ -236,6 +238,7 @@ function bakeGeo(list, mtx, glow){
   bg.setAttribute('normal',new THREE.BufferAttribute(nor,3));
   bg.setAttribute('color',new THREE.BufferAttribute(col,3));
   if (uv) bg.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+  if (life) bg.setAttribute('life',new THREE.BufferAttribute(life,4));
   bg.setIndex(new THREE.BufferAttribute(idx,1));
   bg.computeBoundingSphere();
   return bg;
@@ -366,6 +369,8 @@ function person(col, lying, kit){
   bakeChildren(inner,skip);
   [l1,l2,a1,a2].forEach(l=>{ if (l) bakeChildren(l,skip); });
   // 體型：寬窄、高矮略有不同
+  // 不會走動的人（kit.lo）：躺著的會呼吸（1），坐著站著的上身會輕輕晃（2）——由合併後的頂點著色器驅動
+  if (kit.lo) g.userData.life = lying ? 1 : 2;
   if (kit.child) inner.scale.setScalar(kit.child);          // 小孩：整個人等比例縮小
   else if (!kit.exact){ const bw=fxRnd(.93,1.08); inner.scale.set(bw,fxRnd(.95,1.04),bw); }
   const sc=inner.scale.y;
@@ -710,7 +715,7 @@ function dressMedical(small){
     if (pat){
       const pp=person(pat,true,{skin:SKIN[Math.floor(Math.random()*4)],trouser:0x39423f,lo:true});
       pp.position.set(0,.62,0); pp.rotation.y=Math.PI/2; g.add(pp);
-      const sh=box(.9,.18,.64,0xc9cfcb,{rough:.95}); sh.position.set(.5,.74,0); g.add(sh);     // 被單蓋腿
+      const sh=box(.9,.18,.64,0xc9cfcb,{rough:.95}); sh.position.set(.5,.74,0); sh.userData.life=1; g.add(sh);     // 被單蓋腿
     }
     add(g); aoDecal(x,z,2.4,1.2,ry);
     return g;
@@ -805,7 +810,7 @@ function dressCrowd(small){
     pp.position.set(x,.04,z); pp.rotation.y=Math.PI/2; add(pp);
     const L=child?1.0:1.5;
     const bl=box(L,.26*(child?.65:1),(child?.5:.7),BLK[ci%BLK.length],{rough:.97});
-    bl.position.set(x+L*.12,.04+.22*(child?.65:1),z); bl.rotation.y=fxRnd(-.06,.06); add(bl);
+    bl.position.set(x+L*.12,.04+.22*(child?.65:1),z); bl.rotation.y=fxRnd(-.06,.06); bl.userData.life=1; add(bl);
     // 枕頭：捲起來的外套
     const pl=box(.34,.1,.26*(child?.8:1),0x4a4842,{rough:.95}); pl.position.set(x-(child?.62:.98),.08,z); add(pl);
   };
@@ -1006,7 +1011,7 @@ function init3D(){
     if (i<7){ const pp=person([0xb0453c,0xc09a3e,0x4a8a62][i%3],true,{skin:SKIN[i%SKIN.length],trouser:0x39423f,lo:true});
       pp.position.set(bx,.36,bz); scene.add(pp);
       const bl=box(.78,.28,1.0,[0x5f6b66,0x6b6458,0x58626b][i%3],{rough:.95});   // 毯子蓋到腰：上衣的檢傷顏色要看得到
-      bl.position.set(bx,.6,bz+.52); scene.add(bl); }
+      bl.position.set(bx,.6,bz+.52); bl.userData.life=1; scene.add(bl); }
     const iv=box(.05,1.5,.05,0x39454a); iv.position.set(bx+.6,.75,bz-.7); scene.add(iv);
     const bag=box(.16,.24,.08,0x9fd6cf,{emissive:0x1a2a28}); bag.position.set(bx+.6,1.42,bz-.7); scene.add(bag);
     if (i<7){                                   // 點滴管：從袋子垂下來，繞一個弧，接到病人手上
@@ -1069,6 +1074,22 @@ function init3D(){
     g.position.set(q[0],0,q[1]); g.rotation.y=st[2];
     M.npcs.push({g,name,role:r,pos:q,route:[],poi:st,stay:fxRnd(2,14),cool:fxRnd(0,40),carry:st[4]==='pick'});
   });
+  /* 停電後的手電筒：一道往前下方打的光束、地上一圈光、手上一點亮。
+     不是真的燈（那會讓燈數改變、所有材質重新編譯），是加法混合的半透明網格，平常藏起來。 */
+  M.torchMat={
+    beam:new THREE.MeshBasicMaterial({color:0xfff1d6,transparent:true,opacity:.15,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,toneMapped:false}),
+    pool:new THREE.MeshBasicMaterial({color:0xfff1d6,transparent:true,opacity:.32,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}),
+  };
+  const torch=g=>{
+    const t=new THREE.Group(); t.position.set(.18,1.0,.25);
+    const beam=new THREE.Mesh(geo('torchB',()=>new THREE.ConeGeometry(.5,2.6,14,1,true).translate(0,-1.3,0)),M.torchMat.beam);
+    beam.rotation.x=-1.13; t.add(beam);
+    const pool=new THREE.Mesh(geo('torchP',()=>new THREE.CircleGeometry(.62,20).rotateX(-Math.PI/2)),M.torchMat.pool);
+    pool.position.set(-.18,-.96,2.15); pool.scale.set(1,1,1.6); pool.renderOrder=2; t.add(pool);
+    const body=box(.05,.05,.16,0x2a2e30,{rough:.5,metal:.4}); body.position.set(0,0,0); t.add(body);
+    const lens=glowSprite(0xfff1d6,.45,.95); lens.position.set(0,0,.1); t.add(lens);     // 燈頭那一點亮
+    t.visible=false; g.add(t); g.userData.torch=t; return t; };
+  M.npcs.forEach(n=>torch(n.g));
   // 志工搬的那一箱物資：兩手抱在胸前，平常藏起來
   M.npcs.filter(n=>n.role==='vol').forEach(n=>{
     const bx=box(.46,.3,.34,0x8a7a5e,{rough:.9}); bx.position.set(0,1.02,.34); bx.visible=false;
@@ -1251,6 +1272,12 @@ function init3D(){
     new THREE.MeshBasicMaterial({color:0xd99a3c,side:THREE.DoubleSide,transparent:true,opacity:.6}));
   ring.rotation.x=-Math.PI/2; ring.position.y=.05; M.player.add(ring);
   scene.add(M.player);
+  { const t=new THREE.Group(); t.position.set(.18,1.0,.25);              // 藥師自己的手電筒（離開檯燈範圍才拿出來）
+    const beam=new THREE.Mesh(geo('torchB',()=>new THREE.ConeGeometry(.5,2.6,14,1,true).translate(0,-1.3,0)),M.torchMat.beam);
+    beam.rotation.x=-1.13; t.add(beam);
+    const pool=new THREE.Mesh(geo('torchP',()=>new THREE.CircleGeometry(.62,20).rotateX(-Math.PI/2)),M.torchMat.pool);
+    pool.position.set(-.18,-.96,2.15); pool.scale.set(1,1,1.6); pool.renderOrder=2; t.add(pool);
+    t.visible=false; M.player.add(t); M.player.userData.torch=t; }
   // 碎屑每次打擊都從原本的高度落下
   M.debrisY=Float32Array.from({length:B},(_,i)=>ba[i*3+1]);
   optimizeStatic();
@@ -1290,6 +1317,15 @@ function optimizeStatic(){
       return (m.isMeshBasicMaterial?'B':`S${q(m.roughness)}|${q(m.metalness)}|${m.isBaked?0:m.emissive.getHex()}|${m.isBaked?0:m.emissiveIntensity}`)+sh;
     return m.uuid+sh;
   };
+  /* 呼吸與晃動：每一個標了 life 的人或毯子，量出它在世界座標的高度範圍，配一個隨機相位，
+     寫進每個頂點（phase, mode, 底部高度, 高度）。合併之後由頂點著色器依時間位移。 */
+  const _bb=new THREE.Box3();
+  scene.traverse(o=>{
+    if (!o.userData.life || keep.has(o)) return;
+    _bb.setFromObject(o);
+    const v=[Math.random()*6.283, o.userData.life, _bb.min.y, Math.max(.05,_bb.max.y-_bb.min.y)];
+    o.traverse(c=>{ if (c.isMesh) c.userData.lifeV=v; });
+  });
   const groups=new Map();
   (function walk(o){
     for (const c of o.children){
@@ -1314,6 +1350,7 @@ function optimizeStatic(){
             roughness:q(m0.roughness), metalness:q(m0.metalness),
             emissive:m0.isBaked?0:m0.emissive, emissiveIntensity:m0.isBaked?1:m0.emissiveIntensity});
       mat.isBaked=true;
+      if (list.some(m=>m.userData.lifeV) && mat.isMeshStandardMaterial) lifeShader(mat);
     }
     const bg=bakeGeo(list,m=>m.matrixWorld);
     if (!vc) bg.deleteAttribute('color');
@@ -1359,6 +1396,7 @@ function npcRoute(a,b){
   return r.filter((p,i)=>Math.hypot(p[0]-(i?r[i-1][0]:a[0]),p[1]-(i?r[i-1][1]:a[1]))>.05);
 }
 function stepNpc(n,dt){
+  if (n.pauseT>0){ n.pauseT-=dt; return; }          // 剛斷電：站在原地
   const list=POI[n.role]||POI.nurse;
   if (!n.route.length){
     n.stay-=dt;
@@ -1409,7 +1447,9 @@ function powerLights(now, wob){
     E.exit.forEach(g=>g.material.opacity = m==='main'?.28:.75);
   };
   if (S.genOn && P.mode!=='main') setMode('main');
-  if (!S.genOn && P.mode==='main') setMode('cut');
+  if (!S.genOn && P.mode==='main'){ setMode('cut');
+    M.npcs.forEach(n=>{ n.pauseT=fxRnd(1.4,2.6); });    // 斷電那一下：每個人都停住了 }
+  }
   if (P.mode==='cut' && now-P.t>1600) setMode('emg');
   if (P.mode==='main'){ M.lights.forEach(l=>l.intensity=l.userData.base*wob); E.beamMat.opacity=0; return; }
   if (P.mode==='cut'){                      // 斷電：幾支燈管抽搐兩下就熄了
@@ -1421,6 +1461,25 @@ function powerLights(now, wob){
   const on = Math.min(1,(now-P.t)/350);     // 繼電器跳起來，燈頭一下子亮
   M.lights.forEach((l,i)=>l.intensity = E.lamps[i] ? .62*on*sag : 0);
   E.beamMat.opacity=.05*on*sag;
+}
+/* 不會走動的人的生命感：合併後的頂點色材質多一段頂點著色器。
+   mode 1（躺著、毯子）：越上面的頂點隨呼吸起伏越多，約 1.2 公分，一分鐘十幾次；
+   mode 2（坐著、站著）：上半身隨高度平方輕輕晃，頭頂約 2 公分，每個人節奏不同。
+   不拆網格、不加 draw call；陰影貼圖沒有跟著動，差 1–2 公分看不出來。 */
+M.lifeU={value:0};
+function lifeShader(mat){
+  mat.onBeforeCompile=sh=>{
+    sh.uniforms.uLife=M.lifeU;
+    sh.vertexShader='attribute vec4 life;\nuniform float uLife;\n'+sh.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+      if (life.y>0.5){
+        float h=clamp((transformed.y-life.z)/life.w,0.,1.);
+        if (life.y<1.5) transformed.y+=sin(uLife*1.25+life.x)*.012*h;
+        else { float h2=h*h;
+          transformed.x+=sin(uLife*.55+life.x)*.022*h2;
+          transformed.z+=cos(uLife*.43+life.x*1.7)*.016*h2; }
+      }`);
+  };
+  mat.customProgramCacheKey=()=>'life';
 }
 /* 擋住鏡頭的柱子與牆變淡：從鏡頭往玩家的胸口與頭打射線，
    再往玩家左右各一公尺半打兩條——擋住身邊視野的柱子也一樣礙事。 */
@@ -1772,6 +1831,14 @@ function render3D(dt){
   M.lastDebris=debris;
   M.labels.forEach(sp=>{ const d=Math.hypot(sp.position.x-player.pos[0],sp.position.z-player.pos[1]);
     sp.material.opacity = player.wide?.6:Math.max(0,Math.min(.58,(d-3)/9)); });
+  M.lifeU.value=now/1000;
+  // 手電筒：緊急照明亮起之後才拿出來；光束隨手微微晃
+  const emg=M.power.mode==='emg';
+  M.npcs.forEach((n,i)=>{ const t=n.g.userData.torch; if (!t) return;
+    t.visible=emg && !n.carry;
+    if (t.visible){ t.rotation.y=Math.sin(now/900+i*1.7)*.18; t.rotation.x=Math.sin(now/1300+i)*.06; } });
+  { const t=M.player.userData.torch; t.visible=emg && !S.atBench;
+    if (t.visible){ t.rotation.y=Math.sin(now/1100)*.08; } }
   // 陰影貼圖：畫質等級決定隔幾幀更新一次（場景靜態，只有人在動）
   M.frame=(M.frame||0)+1;
   if (renderer.shadowMap.enabled && M.frame%(perf.shadowEvery||1)===0) renderer.shadowMap.needsUpdate=true;

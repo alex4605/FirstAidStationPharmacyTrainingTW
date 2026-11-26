@@ -391,6 +391,8 @@ function gait(g, dt){
   const s=Math.sin(L.ph)*.5*L.amt;
   L.l1.rotation.x=s; L.l2.rotation.x=-s;
   L.a1.rotation.x=L.ar-s*.75; L.a2.rotation.x=L.ar+s*.75;
+  const k=Math.min(1,dt*4);                     // 抱過東西、做過事之後，手臂慢慢回到自然下垂
+  L.a1.rotation.z+=(.09-L.a1.rotation.z)*k; L.a2.rotation.z+=(-.09-L.a2.rotation.z)*k;
 }
 /* ---------- 場景陳設 ----------
    這裡本來是社區大樓的地下二樓停車場。停車格線、柱號、消防栓、通風管、
@@ -1062,8 +1064,15 @@ function init3D(){
     vol:{trouser:0x3a4038,vest:0x6f8a5f,band:0xd9c05e,skin:SKIN[1]}};
   roam.forEach(([r,name,p],i)=>{
     const g=person(ROLECOL[r], false, ROLEKIT[r]||{}); g.position.set(p[0],0,p[1]); scene.add(g);
-    M.npcs.push({g,name,role:r,pos:[...p],tgt:[...p],wait:fxRnd(0,20),cool:fxRnd(0,40)});
+    // 一開始就站在自己該在的某個位置上（不是隨便一點：那樣第一趟可能直接穿過柱子）
+    const L0=POI[r]||POI.nurse, st=L0[i%L0.length], q=[st[0],st[1]];
+    g.position.set(q[0],0,q[1]); g.rotation.y=st[2];
+    M.npcs.push({g,name,role:r,pos:q,route:[],poi:st,stay:fxRnd(2,14),cool:fxRnd(0,40),carry:st[4]==='pick'});
   });
+  // 志工搬的那一箱物資：兩手抱在胸前，平常藏起來
+  M.npcs.filter(n=>n.role==='vol').forEach(n=>{
+    const bx=box(.46,.3,.34,0x8a7a5e,{rough:.9}); bx.position.set(0,1.02,.34); bx.visible=false;
+    n.g.add(bx); n.g.userData.carryBox=bx; });
   // 諮詢者：需要時才出現在領藥窗口
   M.consult=person(0xd9a06b,false,{own:true}); M.consult.position.set(WINDOW[0]+.4,0,WINDOW[1]);
   M.consult.visible=false; scene.add(M.consult);
@@ -1325,6 +1334,61 @@ function optimizeStatic(){
   scene.updateMatrixWorld(true);
   M.merged=merged;
 }
+/* ---------- 隊員的日常 ----------
+   原本每個人每隔幾秒挑一個隨機點直直走過去，會穿過病床與柱子，走到了也沒事做。
+   現在每個職類有自己會去的地方（POI：[x, z, 到了面向哪, 1＝動手做事／0＝站著講話, 特殊]），
+   走法是先沿著走道、再轉進去（L 形），走道選在柱列與床列之間的空檔。
+   ・護理師：留觀床邊、診療床邊
+   ・醫師：診療床、留觀床、檢傷桌
+   ・志工：在庫備品區的架子拿物資，抱著箱子送到公共空間或檢傷（'pick'／'drop'）
+   ・心理師：沿牆去看那些家庭，站著跟他們講話
+   ・醫檢師、放射師：行政桌、冷藏庫、隔離帳篷、病床 */
+const BEDSPOT=i=>{ const bx=6.3+(i%5)*1.6, bz=-2.4+Math.floor(i/5)*4.6; return [bx-.66,bz-.25,Math.PI/2,1]; };
+const POI={
+  nurse:[0,2,3,4,5,6].map(BEDSPOT).concat([[-6.6,-2.08,Math.PI,1],[-6.6,1.62,0,1],[4.6,-4.4,Math.PI,0]]),
+  doc:[[-6.6,-2.08,Math.PI,1],[-6.6,1.62,0,1],BEDSPOT(0),BEDSPOT(5),BEDSPOT(3),[-.4,-4.35,Math.PI,0],[-3.4,3.85,0,0]],
+  vol:[[-10.2,-6.85,Math.PI,1,'pick'],[1.8,4.7,0,1,'drop'],[-1.2,-4.3,Math.PI,1,'drop'],[3.0,-8.0,Math.PI,1,'drop']],
+  psy:[[.4,4.85,0,0],[2.5,4.95,0,0],[-1.15,2.4,-Math.PI/2,0],[5.5,4.9,0,0],[3.9,1.6,Math.PI/2,0]],
+  lab:[[-10.5,-6.75,Math.PI,1],[FRIDGE[0]+.95,FRIDGE[1],-Math.PI/2,1],[4.0,-5.0,Math.PI,1],BEDSPOT(4)],
+  rad:[[5.5,-5.45,Math.PI,0],BEDSPOT(2),BEDSPOT(6),[-.4,-4.35,Math.PI,0],[-6.6,1.62,0,1]],
+};
+function npcRoute(a,b){
+  // 兩端都在北邊那一排（行政、藥局、檢傷、隔離）就走 z=-4 那條線；否則走中央走道 z=0.1
+  const zc = (a[1]<-3.9 && b[1]<-3.9) ? -4.0 : 0.1;
+  const r=[[a[0],zc],[b[0],zc],[b[0],b[1]]];
+  return r.filter((p,i)=>Math.hypot(p[0]-(i?r[i-1][0]:a[0]),p[1]-(i?r[i-1][1]:a[1]))>.05);
+}
+function stepNpc(n,dt){
+  const list=POI[n.role]||POI.nurse;
+  if (!n.route.length){
+    n.stay-=dt;
+    if (n.poi){                                     // 站定了：慢慢轉向要面對的方向
+      let d=n.poi[2]-n.g.rotation.y; d=Math.atan2(Math.sin(d),Math.cos(d));
+      n.g.rotation.y+=d*Math.min(1,dt*3);
+    }
+    if (n.stay>0) return;
+    // 志工：手上有東西就送出去，沒有就回架子拿
+    let opts=list.filter(p=>p!==n.poi);
+    if (n.role==='vol') opts = n.carry ? list.filter(p=>p[4]==='drop') : list.filter(p=>p[4]==='pick');
+    n.poi=opts[Math.floor(Math.random()*opts.length)];
+    n.route=npcRoute(n.pos,n.poi);
+    return;
+  }
+  const t=n.route[0], dx=t[0]-n.pos[0], dz=t[1]-n.pos[1], d=Math.hypot(dx,dz);
+  const sp=(n.carry?1.15:1.45)*dt;
+  if (d<=sp){ n.pos[0]=t[0]; n.pos[1]=t[1]; n.route.shift();
+    if (!n.route.length){                            // 到了
+      n.stay = n.poi[3]===1 ? fxRnd(10,24) : fxRnd(8,16);
+      if (n.poi[4]==='pick') n.carry=true;
+      if (n.poi[4]==='drop') n.carry=false;
+    }
+  } else {
+    n.pos[0]+=dx/d*sp; n.pos[1]+=dz/d*sp;
+    let want=Math.atan2(dx,dz), dd=want-n.g.rotation.y; dd=Math.atan2(Math.sin(dd),Math.cos(dd));
+    n.g.rotation.y+=dd*Math.min(1,dt*10);           // 轉彎不是瞬間的
+  }
+  n.g.position.set(n.pos[0],0,n.pos[1]);
+}
 /* 供電狀態：main 正常 → cut 斷電那一兩秒（全黑、燈管殘閃）→ emg 緊急照明。
    恢復供電（接續下一天、加了油）就直接回到 main。 */
 function powerLights(now, wob){
@@ -1524,15 +1588,8 @@ function render3D(dt){
   const now=performance.now();
   M.player.position.set(player.pos[0],0,player.pos[1]);
   M.player.rotation.y=player.yaw;
-  // NPC 漫步
-  M.npcs.forEach(n=>{
-    n.wait-=dt;
-    if (n.wait<=0){ n.tgt=[fxRnd(-2,12),fxRnd(-8,5)]; n.wait=fxRnd(6,18); }
-    const dx=n.tgt[0]-n.pos[0], dz=n.tgt[1]-n.pos[1], d=Math.hypot(dx,dz);
-    if (d>.2){ const s=Math.min(d,1.5*dt); n.pos[0]+=dx/d*s; n.pos[1]+=dz/d*s;
-      n.g.rotation.y=Math.atan2(dx,dz); }
-    n.g.position.set(n.pos[0],0,n.pos[1]);
-  });
+  // 隊員：各自有該去的地方、到了有事做
+  M.npcs.forEach(n=>stepNpc(n,dt));
   // 諮詢者／前來幫忙的民眾站在領藥窗口
   // 一次走完佇列：數出待處理件數，順便找出第一個站在窗口的人（每幀都跑，不另外配置陣列）
   let con=null, nPending=0;
@@ -1655,6 +1712,14 @@ function render3D(dt){
     L.a2.rotation.x += (-1.05+Math.sin(t*4.1+1.3)*.16 - L.a2.rotation.x)*L.w;
     L.a1.rotation.z += (.22-L.a1.rotation.z)*L.w*.5; L.a2.rotation.z += (-.22-L.a2.rotation.z)*L.w*.5; };
   work(M.player, !!(S.task && !S.task.walk && S.atBench) && M.player.userData.limbs.amt<.2, 0);
+  M.npcs.forEach((n,i)=>{
+    const L=n.g.userData.limbs;
+    work(n.g, !n.route.length && !!(n.poi && n.poi[3]===1) && !n.carry, i*2.3);
+    if (n.g.userData.carryBox){                       // 抱著箱子：兩手往前托住
+      n.g.userData.carryBox.visible=!!n.carry;
+      if (n.carry && L){ L.a1.rotation.x=L.a2.rotation.x=-1.15; L.a1.rotation.z=.25; L.a2.rotation.z=-.25; }
+    }
+  });
   M.helperNpcs.forEach((g,i)=>{ const r=S.helpers[i]; if (!g.visible||!r) return;
     const at=helperSpot(r); work(g, !!(r.job||r.chore) && Math.hypot(at[0]-g.position.x,at[1]-g.position.z)<.15, i*1.7); });
   // 領到藥的人拎著白色藥袋走

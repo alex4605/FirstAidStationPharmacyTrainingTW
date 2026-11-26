@@ -329,6 +329,17 @@ function endGame(){
           <td class="verd ${j.skipped?'v2':'v0'}">${j.skipped?'未辨識即上架':'已比對後入庫'}</td></tr>`
       ).join('') || '<tr><td colspan="4">本場沒有外來品項需要辨識。</td></tr>'}
     </table></div>
+    <h2>志工搜刮回來的藥</h2>
+    ${S.jobs.filter(j=>j.kind==='scav'&&j.status==='done').map(j=>`
+      <p style="color:var(--ink-faint);font-size:12px">${clock(j.doneAt)}　·　${j.from.who}　·　${j.from.where}　·
+        ${j.recAt?'來源已登記':'<b style="color:var(--warn)">來源未登記</b>'}</p>
+      <div class="tblwrap"><table><tr><th>品項</th><th>你的處理</th><th>應該</th><th>判定</th></tr>
+      ${j.rows.map((r,i)=>{ const v=j.result.rows[i];
+        return `<tr><td>${r.name}${r.packTxt?`<br><span style="color:var(--ink-faint);font-size:11px">${r.packTxt}</span>`:''}</td>
+          <td>${v.label}</td><td>${v.should}</td>
+          <td class="verd ${v.v==='good'?'v0':v.v==='mid'?'v1':'v2'}">${v.v==='good'?'正確':v.v==='mid'?'可以更好':'錯誤'}${
+            v.v!=='good'&&v.note?`<br><span style="font-weight:400;font-size:11px">${v.note}</span>`:''}</td></tr>`; }).join('')}
+      </table></div>`).join('') || '<p>本場沒有志工帶藥回來，或你沒有處理。</p>'}
     <h2>物資調撥與外部協調</h2>
     <div class="tblwrap"><table><tr><th>時間</th><th>對象</th><th>結果</th><th>理由</th></tr>${logiRows}</table></div>
     <h2>現場秩序與情緒處理</h2>

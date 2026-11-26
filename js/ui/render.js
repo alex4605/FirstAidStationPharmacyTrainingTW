@@ -33,9 +33,9 @@ function flushUI(){
   if (dirty.stock){ renderShelf(); dirty.stock=false; }
   if (dirty.helpers){ renderHelpers(); dirty.helpers=false; }
   const ae=document.activeElement;
-  // 只擋住「正在輸入」的元素；勾選框必須讓它重繪，否則按鈕不會解鎖。
+  // 只擋住「正在輸入」的元素；勾選框與單選鈕必須讓它重繪，否則按鈕不會解鎖、後續欄位不會出現。
   const busy=uiHeld()||(ae&&(ae.tagName==='SELECT'||ae.tagName==='TEXTAREA'
-    ||(ae.tagName==='INPUT'&&ae.type!=='checkbox'))&&$('detail').contains(ae));
+    ||(ae.tagName==='INPUT'&&ae.type!=='checkbox'&&ae.type!=='radio'))&&$('detail').contains(ae));
   if (dirty.detail&&!busy){ renderDetail(); dirty.detail=false; }
   if (dirty.log){ renderLog(); dirty.log=false; }
   if (dirty.speech){ renderSpeech(); dirty.speech=false; }
@@ -71,7 +71,7 @@ function renderTop(){
 }
 const qFilter={kind:'all', pendOnly:false};
 const KN={wq:['窗口','wq'],walk:['巡視','walk'],fu:['後續','fu'],rx:['RX','rx'],con:['CON','con'],edu:['EDU','edu'],emt:['EMT','emt'],emt2:['EMT','emt'],logi:['物流','logi'],lang:['語言','lang'],
-  ass:['ASS','ass'],cbr:['CBRNE','cbr'],help:['幫手','help'],crowd:['現場','crowd'],idn:['辨識','idn']};
+  ass:['ASS','ass'],cbr:['CBRNE','cbr'],help:['幫手','help'],crowd:['現場','crowd'],idn:['辨識','idn'],scav:['物資','scav']};
 function renderHelpers(){
   const hm=$('hmeta');
   hm.textContent = S.helpers.length? `${S.helpers.length} 人・已簡介 ${S.briefed}` : '尚無';
@@ -102,7 +102,7 @@ function renderQueue(){
     counts[k]=counts[k]||{all:0,p:0}; counts[k].all++;
     if (j.status==='pending'){ counts[k].p++; pend++; } });
   const FK=[['all','全部'],['wq','窗口'],['walk','巡視'],['fu','後續'],['rx','處方'],['con','諮詢'],['edu','衛教'],['emt','EMT'],
-    ['ass','支援'],['logi','物流'],['idn','辨識'],['lang','語言'],['crowd','現場'],['cbr','CBRNE'],['help','幫手']];
+    ['ass','支援'],['logi','物流'],['scav','物資'],['idn','辨識'],['lang','語言'],['crowd','現場'],['cbr','CBRNE'],['help','幫手']];
   put('qfilter', FK.map(([k,n])=>{
     if (k==='all') return `<button class="qf" data-qf="all" aria-pressed="${qFilter.kind==='all'}">全部<b>${pend}</b></button>`;
     const c=counts[k]; if(!c) return '';
@@ -164,6 +164,10 @@ function renderQueue(){
       title=j.c.f; sub=j.mode==='give'?'物流到訪　·　來補給':'物流到訪　·　來徵調'; who=j.c.who;
       if (j.status==='done') chips=`<span class="chip ${j.recAt?'done':'ret'}">${
         j.mode==='give'?'已接收':'已處理徵調'}${j.recAt?'・有紀錄':'・無紀錄'}</span>`;
+    } else if (j.kind==='scav'){
+      title=`搜刮回來的藥 ${j.rows.length} 項`; sub=`志工帶回　·　${j.from.where}`; who=j.from.who;
+      if (j.status==='done'){ const R=j.result;
+        chips=`<span class="chip ${R.bad?'err':R.mid?'ret':'done'}">正確 ${R.good}／${j.rows.length}</span>`; }
     } else if (j.kind==='idn'){
       title=`${j.items.length} 項不熟悉的包裝`; sub=`待辨識區　·　${j.from}`; who=j.who;
       if (j.status==='done') chips=`<span class="chip ${j.skipped?'err':'done'}">${j.skipped?'未辨識即上架':'已辨識上架'}</span>`;
@@ -200,6 +204,7 @@ function renderQueue(){
       : j.kind==='walk' ? (j.sub==='bed'?`${j.src.dose}`:'每兩小時一次')
       : j.kind==='ass' ? j.ask.slice(0,38)+'…'
       : j.kind==='logi' ? (j.mode==='give'?j.c.give:j.c.take).slice(0,34)+'…'
+      : j.kind==='scav' ? `「${j.from.say.slice(0,30)}…」`
       : j.kind==='idn' ? j.items.map(x=>x.brand.split('（')[0]).join('、').slice(0,34)+'…'
       : j.kind==='crowd' ? j.intro.replace(/<[^>]+>/g,' ').slice(0,34)+'…'
       : j.kind==='lang' ? `${j.age}歲${j.sex}・${j.dx}`
@@ -301,6 +306,7 @@ function renderDetail(){
   if (j.kind==='lang') return renderLang(j);
   if (j.kind==='crowd') return renderCrowd(j);
   if (j.kind==='idn') return renderIdn(j);
+  if (j.kind==='scav') return renderScav(j);
   if (j.kind==='help') return renderHelp(j);
   if (j.kind==='fu') return renderFu(j);
   if (j.kind==='walk') return renderWalk(j);

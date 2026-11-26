@@ -9,7 +9,7 @@
   --cold:#4fa8b8; --ctrl:#b8586b;
   --k-rx:#d99a3c; --k-con:#7f9fd6; --k-edu:#5fbfa8; --k-emt:#c6362f;
   --k-ass:#b3a17a; --k-cbr:#b07fd6; --k-help:#8fbf7f; --k-logi:#8a9b6b; --k-lang:#d9a06b;
-  --k-crowd:#d97f8a; --k-idn:#7fc2d9;
+  --k-crowd:#d97f8a; --k-idn:#7fc2d9; --k-scav:#c9a96b;
   --t1:#c6362f; --t2:#d9a521; --t3:#3e8e5a; --t4:#5a6266;
   --ok:#4f9268; --warn:#d9873a; --bad:#c6362f;
   --mono:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
@@ -92,6 +92,21 @@ button:focus-visible,select:focus-visible,input:focus-visible,[tabindex]:focus-v
 .job.k-crowd{border-left-color:var(--k-crowd)}
 .job.k-idn{border-left-color:var(--k-idn)}
 .kind.idn{color:var(--k-idn);border-color:var(--k-idn)}
+.job.k-scav{border-left-color:var(--k-scav)} .kind.scav{color:var(--k-scav);border-color:var(--k-scav)}
+/* 搜刮回來的藥：每一項一張小卡，左邊畫一排鋁箔 */
+.scav{border:1px solid var(--line);border-left:3px solid var(--k-scav);padding:8px 10px;margin:8px 0;background:rgba(255,255,255,.015)}
+.scav.good{border-left-color:var(--ok)} .scav.mid{border-left-color:var(--warn)} .scav.bad{border-left-color:var(--bad)}
+.scav-h b{font-size:12.5px} .scav-h small{margin-left:8px;color:var(--ink-faint);font-size:10.5px}
+.scav-p{display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:11.5px;color:var(--ink-dim);line-height:1.6;flex-wrap:wrap}
+.scav-p>span:last-child{flex:1;min-width:160px}
+.scav-o{display:flex;flex-wrap:wrap;gap:4px 10px} .scav-o .chk{margin:0;flex:0 1 auto}
+.scav-n{margin-top:6px} .scav-n input{width:110px;font-family:var(--mono)}
+.scav-r{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.scav-w{margin-top:6px;font-size:11px;color:var(--ink-faint);line-height:1.6}
+.blister{display:inline-grid;gap:2px;padding:3px;background:#9da4a6;border-radius:3px;flex:0 0 auto;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.blister i{width:8px;height:8px;border-radius:50%;background:#f1ede2;box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.blister i.x{background:transparent;box-shadow:inset 0 0 0 1px #5a6264}
 .kind.crowd{color:var(--k-crowd);border-color:var(--k-crowd)}
 .kind.logi{color:var(--k-logi);border-color:var(--k-logi)}
 .kind.lang{color:var(--k-lang);border-color:var(--k-lang)}

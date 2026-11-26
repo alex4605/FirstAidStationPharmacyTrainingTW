@@ -1098,6 +1098,8 @@ function init3D(){
   // 諮詢者：需要時才出現在領藥窗口
   M.consult=person(0xd9a06b,false,{own:true}); M.consult.position.set(WINDOW[0]+.4,0,WINDOW[1]);
   M.consult.visible=false; scene.add(M.consult);
+  { const bx=box(.5,.32,.38,0x8a7a5e,{rough:.9}); bx.position.set(0,1.0,.36); bx.visible=false;   // 搜刮回來的那一箱
+    M.consult.add(bx); M.consult.userData.carryBox=bx; }
   // 維安：每一種先做一個，藏起來。有人經過的時候才出現
   M.sec = SECURITY.map(sp=>{
     const k=sp.kit;
@@ -1795,16 +1797,20 @@ function render3D(dt){
   for (const j of S.jobs){
     if (j.status!=='pending') continue;
     nPending++;
-    if (!con && (j.kind==='con'||j.kind==='help'||j.kind==='crowd'||j.kind==='lang')) con=j;
+    if (!con && (j.kind==='con'||j.kind==='help'||j.kind==='crowd'||j.kind==='lang'||j.kind==='scav')) con=j;
   }
   M.consult.visible=!!con;
   if (con){
     const col = con.kind==='help' ? con.h.col
       : con.kind==='crowd' ? 0xd97f8a
       : con.kind==='lang' ? 0xd9a06b
+      : con.kind==='scav' ? 0x6f8a5f
       : (ROLECOL[ROLEKEY[con.role]||'out']);
     (M.consult.userData.body||M.consult.children[0]).material.color.setHex(col);
     M.consult.rotation.y=-Math.PI/2;
+    const L=M.consult.userData.limbs, carry=con.kind==='scav';
+    M.consult.userData.carryBox.visible=carry;
+    if (L){ L.a1.rotation.x=L.a2.rotation.x=carry?-1.15:-.06; L.a1.rotation.z=carry?.25:.09; L.a2.rotation.z=carry?-.25:-.09; }
     // 窗口前的人：吼的人在動，悲傷的人不動，發抖的人在抖
     const t=now;
     if (con.kind==='crowd'){

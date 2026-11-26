@@ -124,6 +124,7 @@ const T = {
   back:2, doff:5, rest:8,                  // 返回、脫裝備、休息
   idnIntl:4, idnDom:2,                     // 外來品項辨識的基本時間
   reqList:3,                               // 要求對方補一張書面需求清單
+  scav:3, scavRow:1.2,                     // 搜刮回來的藥：清點基本時間＋每一項
   askPt:1, bed:2, temp:1,                  // 問病人、床邊核對、記錄冷藏溫度
 };
 const FREQ = {qd:1,hs:1,bid:2,tid:3,qid:4,q4h:6,q6h:4,q8h:3,q12h:2,q24h:1,stat:1,prn:0};

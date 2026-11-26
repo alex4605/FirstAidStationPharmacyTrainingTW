@@ -172,6 +172,8 @@ const SCENARIO = (()=>{
   const convoys = sample(CONVOYS, rint(1,3)).map(c=>({kind:'logi', c,
     mode: chance(.55)?'give':'take'}));
   place(convoys, 120, endT-50, 60);
+  // 志工從外面搜刮回來的藥（OTC）：1–2 箱。箱子裡有什麼由種子決定
+  place(Array.from({length:rint(1,2)},()=>makeScav()), 130, endT-70, 70, {kind:'scav'});
   // 語言不通的傷患：1–2 位
   place(sample(LANG_CASES, rint(1,2)), 90, endT-70, 60, {kind:'lang'});
   // 窗口前的人：一場 2–4 件

@@ -399,6 +399,122 @@ function doIdentify(j, doIt){
   });
 }
 
+/* ---------- 志工搜刮回來的藥 ----------
+   一箱 OTC：每一項決定「併入庫存（數清楚）／另外標示存放／不收」，再登記來源。
+   難處有二：包裝不一樣（12、10、14、7 錠一排，整盒、散排、吃過的半排），
+   以及「看起來一樣、其實不能併」的東西（含量不同、複方、兒童劑型）。 */
+/** 一排鋁箔的小圖：per 個孔，left 之後的是被壓掉的空孔 */
+function blisterSvg(per,left){
+  if (!per) return '';
+  const rows = per<=8 ? 1 : 2, cols=Math.ceil(per/rows);
+  let h=`<span class="blister" style="grid-template-columns:repeat(${cols},1fr)" aria-label="${per} 錠一排${left<per?`，剩 ${left} 錠`:''}">`;
+  for (let i=0;i<per;i++) h+=`<i class="${i<left?'':'x'}"></i>`;
+  return h+'</span>';
+}
+const SCAV_MIN = j => { const helper=availHelper('count');
+  return Math.round((T.scav + j.rows.length*T.scavRow) * (helper?.7:1)); };
+const SCAV_CH = {in:'併入庫存', sep:'另外標示存放', no:'不收'};
+function renderScav(j){
+  const f=j.from, done=j.status==='done';
+  let h=`<div class="pane"><h2>搜刮回來的藥：${j.rows.length} 項</h2>
+    <div class="sub">${f.who}　·　${f.where}　·　${clock(j.issued)}　·　領藥窗口</div>
+    <div class="paper" data-t="一箱"><div class="prow"><span>${f.who}</span>
+      <b style="color:var(--ink-dim);font-weight:400">「${f.say}」</b></div></div>`;
+  const rowHead=(r,i)=>`<div class="scav-h"><b>${i+1}. ${r.name}</b>${r.maker?`<small>${r.maker}</small>`:''}</div>
+      <div class="scav-p">${r.per?`${blisterSvg(r.per,r.per)}${r.pack&&r.pack.part?blisterSvg(r.per,r.pack.part):''}`:''}
+        <span>${r.packTxt||''}${r.tell?(r.packTxt?'<br>':'')+r.tell:''}</span></div>`;
+  if (done){
+    const R=j.result;
+    h+=`<div class="note ${R.bad?'':(R.mid?'warn':'ok')}" style="${R.bad?'border-left-color:var(--bad)':''}">
+      ${R.good}／${j.rows.length} 項處理正確${R.bad?`，<b>${R.bad} 項處理錯誤</b>`:''}${R.mid?`，${R.mid} 項可以更好`:''}。
+      ${R.cntWrong?`<br><b>數量算錯 ${R.cntWrong} 項</b>：帳面與架上從這裡開始對不上。`:''}
+      ${j.recAt?'<br>來源已登記，志工已簽名。':'<br><b style="color:var(--warn)">沒有登記來源。</b>之後有人問這批藥從哪裡來、誰拿的，沒有答案。'}</div>`;
+    j.rows.forEach((r,i)=>{ const v=R.rows[i];
+      h+=`<div class="scav ${v.v}">${rowHead(r,i)}
+        <div class="scav-r"><span class="chip ${v.v==='good'?'done':v.v==='mid'?'ret':'err'}">你：${v.label}</span>
+          ${v.v!=='good'?`<span class="chip">應該：${v.should}</span>`:''}</div>
+        ${v.note?`<div class="scav-w">${v.note}</div>`:''}</div>`; });
+    put('detail',h+'</div>'); return;
+  }
+  const helper=availHelper('count');
+  h+=`<div class="note">每一項決定怎麼處理。<b>併入庫存</b>的要寫出總數——這一箱裡每排的錠數不一樣，有整盒、有散排、也有吃過一半的。
+      <br><span style="color:var(--ink-faint)">能不能併，看的是成分、含量、劑型與效期是不是跟本站那一項完全一樣，不是看「是不是止痛藥」。</span></div>
+    ${helper?`<div class="note ok">${helper.h.name} 可以幫你一起數。</div>`:''}`;
+  j.rows.forEach((r,i)=>{
+    const c=j.ch[i], d=r.target?drugById[r.target]:null;
+    const opt=(k,label)=>`<label class="chk ${c===k?'on':''}"><input type="radio" name="sc${j.n}-${i}" data-scv="${i}" value="${k}" ${c===k?'checked':''}>
+      <span><b>${label}</b></span></label>`;
+    h+=`<div class="scav">${rowHead(r,i)}
+      <div class="scav-o">${d?opt('in',`併入 ${d.n}`):''}${opt('sep','另外標示存放')}${opt('no','不收')}</div>
+      ${c==='in'?`<div class="field scav-n"><label>總共幾${r.unit==='顆'?'顆':r.unit}？</label>
+        <input type="number" inputmode="numeric" min="0" step="1" data-scvn="${i}" value="${j.cnt[i]!=null?j.cnt[i]:''}" placeholder="數清楚再填"></div>`:''}
+    </div>`;
+  });
+  h+=`<label class="chk ${j.rec?'on':''}" style="margin-top:8px"><input type="checkbox" id="sc-rec" ${j.rec?'checked':''}>
+      <span><b>登記來源：地點、帶回的人、時間，請志工簽名</b><small>這批藥不是從供應鏈來的。之後出了問題，你要能說出它從哪裡來</small></span></label>
+    ${j.err?`<div class="note" style="border-left-color:var(--bad)">${j.err}</div>`:''}
+    <div class="btnrow"><button class="pbtn" data-cmd="scgo">清點完成（${SCAV_MIN(j)} 分鐘${helper?`・${helper.h.name} 協助`:''}）</button></div></div>`;
+  if (put('detail',h)){
+    const D=$('detail');
+    // j 是單一真相來源：選擇與數字隨時寫回 j，重繪時從 j 讀回來
+    D.querySelectorAll('[data-scv]').forEach(el=>el.onchange=()=>{ j.ch[+el.dataset.scv]=el.value; j.err=''; dirty.detail=true; });
+    D.querySelectorAll('[data-scvn]').forEach(el=>el.oninput=()=>{ j.cnt[+el.dataset.scvn]=el.value; });
+    const rc=$('sc-rec'); if (rc) rc.onchange=()=>{ j.rec=rc.checked; dirty.detail=true; };
+    D.querySelector('[data-cmd="scgo"]').onclick=()=>answerScav(j);
+  }
+}
+function answerScav(j){
+  // 送出前先確認每一項都決定了、要併入的都填了數字
+  const miss=j.rows.findIndex((r,i)=>!j.ch[i]);
+  if (miss>=0){ j.err=`第 ${miss+1} 項還沒決定怎麼處理。`; dirty.detail=true; return; }
+  const noN=j.rows.findIndex((r,i)=>j.ch[i]==='in' && !(String(j.cnt[i]||'').trim().match(/^\d+$/)));
+  if (noN>=0){ j.err=`第 ${noN+1} 項要併入庫存，請填上總數（整數）。`; dirty.detail=true; return; }
+  const ch=j.ch.slice(), cnt=j.cnt.map(x=>x==null?null:parseInt(x,10)), rec=!!j.rec;
+  const helper=availHelper('count'), hn=helper?helper.h.name:null;
+  startWork(`清點搜刮回來的藥（${j.from.where}）${hn?`・${hn}協助`:''}`, SCAV_MIN(j), ()=>{
+    j.status='done'; j.doneAt=S.t; j.recAt=rec;
+    const R={rows:[], good:0, mid:0, bad:0, cntWrong:0};
+    j.rows.forEach((r,i)=>{
+      const c=ch[i], n=cnt[i], d=r.target?drugById[r.target]:null, short=d?d.n:'';   // 用完整品名：「Aspirin」分不出 100mg 還是 500mg
+      const label = c==='in' ? `併入 ${short}${n!=null?`（填 ${n}）`:''}` : SCAV_CH[c];
+      const should = r.ok==='in' ? `併入 ${short}，共 ${r.total} ${r.unit}` : SCAV_CH[r.ok];
+      let v='good', note='';
+      if (c==='in'){
+        d.have += r.total; d.book += n;                  // 架上多了實際的數量；帳面多了你寫的數字
+        if (r.ok==='in'){
+          if (n!==r.total){ v='bad'; R.cntWrong++;
+            note=`實際是 ${r.total} ${r.unit}，你寫 ${n}。${r.packTxt}。`; }
+        } else if (r.ok==='sep'){ v='bad'; d.mixed=(d.mixed||0)+r.total;
+          note=r.why;
+          mark('P2', false, `${r.name} 併入 ${d.n} 的庫存（含量或成分不同，之後照顆數給藥會給錯）`);
+        } else { v='bad'; d.spoiled=(d.spoiled||0)+r.total;
+          note=r.why;
+          mark('P4', false, `不該收的藥進了可調劑的庫存：${r.name}`);
+        }
+      } else if (c==='sep'){
+        if (r.ok==='in'){ v='mid'; note='可以用，也可以直接併入——另外放沒有錯，但它沒進帳，下一個人不知道架上還有這些。'; }
+        else if (r.ok==='no'){ v='bad'; note=r.why; mark('P4', false, `留下了不能用的藥：${r.name}`); }
+        else { (S.sepShelf=S.sepShelf||[]).push({name:r.name, n:r.total, t:S.t}); }
+      } else {
+        if (r.ok==='in'){ v='mid'; note=`這是可以用的，而且本站正缺。退掉的是 ${r.total} ${r.unit}。`; }
+        else if (r.ok==='sep'){ v='mid'; note='它可以用，只是不能併入既有品項。另外標示存放就好，不必丟掉。'; }
+      }
+      if (v==='good' && r.why && r.ok!=='in') note=r.why;
+      R[v]++; R.rows.push({v, label, should, note});
+    });
+    j.result=R;
+    const all=j.rows.length, ok=R.good===all;
+    mark('P4', ok, ok ? `搜刮回來的 ${all} 項藥逐項判斷並正確清點入庫`
+      : `搜刮回來的藥：${all} 項中 ${R.bad} 項處理錯誤、${R.mid} 項可以更好${R.cntWrong?`（數量算錯 ${R.cntWrong} 項）`:''}`);
+    mark('P4', rec, rec ? '非供應鏈來源的藥品已登記來源、經手人與時間' : '非供應鏈來源的藥品未登記來源');
+    if (hn) mark('P10', true, `${hn} 協助清點搜刮回來的藥`);
+    log(`搜刮回來的藥清點完成：正確 ${R.good}／${all}${R.cntWrong?`，數量錯 ${R.cntWrong} 項`:''}。`, R.bad?'l-warn':'l-ok');
+    say(j.from.who, R.bad||R.mid ? '好，那些不能用的我拿去廢棄物區。下次我會先看效期再拿。'
+      : '這樣分清楚了。下次出去我知道要看哪裡了：效期、含量、有沒有開過。', 5600);
+    dirty.q=dirty.detail=dirty.stock=true;
+  });
+}
+
 /* 物流：來給的，或來要的 */
 function answerLogi(j){
   const c=j.c, give=j.mode==='give';

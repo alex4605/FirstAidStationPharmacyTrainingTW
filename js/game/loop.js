@@ -3,8 +3,18 @@
 
 /* ---------- 8. 主迴圈 ---------- */
 let last=0, shake=0, debris=0;
-/* 畫質自適應：連續掉幀就把陰影與像素比降下來，寧可少一點光影也不要卡 */
-const perf={frames:0, acc:0, level:2, warm:0, bad:0};
+/* 畫質自適應：依實際幀率在四個等級之間調整，寧可少一點光影也不要卡。
+   3 全畫質（桌機含後製光暈）→ 2 關掉後製、陰影每三幀更新一次 → 1 再把像素比降到 1 → 0 關閉陰影。
+   2、1 兩級在幀率回穩後會自己升回去；關掉陰影要重新編譯材質，所以 0 不再往回升。 */
+const perf={frames:0, acc:0, level:3, warm:0, bad:0, good:0, shadowEvery:1};
+function setQuality(lv){
+  perf.level=lv;
+  PP.on = PP.ok && lv>=3;                  // 後製（光暈、調色）只在最高一級
+  perf.shadowEvery = lv>=3 ? 1 : 3;
+  renderer.setPixelRatio(lv>=2 ? M.basePR : 1);
+  if (lv===0){ renderer.shadowMap.enabled=false; scene.traverse(o=>{o.castShadow=false;}); }
+  onResize();
+}
 function tuneQuality(raw){
   if (!renderer) return;
   perf.warm+=raw;
@@ -13,13 +23,15 @@ function tuneQuality(raw){
   if (perf.acc<2.5) return;
   const fps=perf.frames/perf.acc; perf.frames=0; perf.acc=0;
   perf.bad = fps<26 ? perf.bad+1 : 0;
+  perf.good = fps>=55 ? perf.good+1 : 0;
   if (perf.bad>=2 && perf.level>0){
-    perf.bad=0;
-    perf.level--;
-    if (perf.level===1){ renderer.setPixelRatio(1); log('畫質已調降（像素比）以維持流暢。'); }
-    else { renderer.shadowMap.enabled=false; scene.traverse(o=>{o.castShadow=false;});
-      log('畫質已調降（關閉陰影）以維持流暢。'); }
-    onResize();
+    perf.bad=0; perf.good=0;
+    setQuality(perf.level-1);
+    log(['畫質已調降（關閉陰影）以維持流暢。','畫質已調降（像素比）以維持流暢。',
+      '畫質已調降（後製光暈與陰影更新頻率）以維持流暢。'][perf.level]);
+  } else if (perf.good>=4 && perf.level>0 && perf.level<3){
+    perf.good=0;
+    setQuality(perf.level+1);              // 回穩了就升回去，不另外通知
   }
 }
 const MIN_PER_SEC = 0.4;   // ×1：1 實秒 ＝ 0.4 遊戲分鐘（白班 720 分鐘 ≈ 30 分鐘實時）

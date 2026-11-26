@@ -33,6 +33,10 @@ function pushJob(spec){
       j.listItems=sample(ASK_ITEMS.filter(x=>!x.sup), rint(2,4)).map(x=>x.n); }
     log(`※ 車道口：${j.c.f} 到了。`, 'l-key');
     say(j.c.who, j.mode==='give'? j.c.give : j.c.take, 6800);
+  } else if (j.kind==='scav'){
+    j.ch=[]; j.cnt=[]; j.rec=false;
+    log(`${j.from.who} 抱回來一箱藥（${j.from.where}），放在領藥窗口：${j.rows.length} 項待清點。`, 'l-key');
+    say(j.from.who, j.from.say, 6400);
   } else if (j.kind==='idn'){
     j.picked=[];
     log(`待辨識區：${j.from} 送來的 ${j.items.length} 項品項需要比對後才能上架。`, 'l-warn');
